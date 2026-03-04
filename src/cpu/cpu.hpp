@@ -29,6 +29,7 @@ public:
   void load_program(const std::vector<uint8_t> &program,
                     uint16_t start_addr = memory_map::PRGROM_START);
   void step();
+  void reset();
 
   uint16_t get_pc() const { return pc; }
   uint8_t get_sp() const { return sp; }
@@ -36,10 +37,12 @@ public:
   uint8_t get_reg_x() const { return reg_x; }
   uint8_t get_reg_y() const { return reg_y; }
   uint8_t get_status() const { return status; }
+  bool is_halted() const { return halted; }
 
   // mem utils
   uint8_t mem_read(uint16_t addr);
   uint16_t mem_read_u16(uint16_t addr);
+  void mem_write(uint16_t addr, uint8_t value);
 
 private:
   uint16_t pc;
@@ -49,6 +52,7 @@ private:
   uint8_t reg_y;
   uint8_t status;
   Bus bus;
+  bool halted = false;
 
   // opcode helpers
   struct OpCode {

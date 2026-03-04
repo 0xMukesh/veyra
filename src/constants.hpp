@@ -23,3 +23,4 @@ constexpr uint16_t PRGROM_START = 0x8000;
 } // namespace memory_map
 
 constexpr uint16_t INTERRUPT_VECTOR = 0xfffe;
+constexpr uint8_t STACK_RESET = 0xfd;

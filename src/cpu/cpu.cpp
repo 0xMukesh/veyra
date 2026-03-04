@@ -1,13 +1,14 @@
 #include "cpu.hpp"
 #include "../constants.hpp"
 #include <cstdint>
+#include <ios>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
 
-
 CPU::CPU()
-    : pc(0), sp(static_cast<uint8_t>(memory_map::STACK_START)), reg_a(0),
+    : pc(0), sp(STACK_RESET), reg_a(0),
       reg_x(0), reg_y(0), status(flags::UNUSED) {}
 
 void CPU::load_program(const std::vector<uint8_t> &program,
@@ -17,12 +18,32 @@ void CPU::load_program(const std::vector<uint8_t> &program,
   }
 
   pc = start_addr;
+  bus.mem_write_u16(0xFFFC, start_addr);
 }
 
 void CPU::step() {
   uint8_t code = fetch_next_byte();
-  const auto &entry = GetOpTable()[code];
-  (this->*entry.handler)(entry.mode);
+  const auto &opcode = GetOpTable()[code];
+  if (opcode.handler == nullptr) {
+      std::cout << "missing opcode handler - " << std::hex << (int)code << std::endl;
+      return;
+  }
+
+  auto pc_state = pc;
+  (this->*opcode.handler)(opcode.mode);
+
+  if (pc == pc_state) {
+    pc += opcode.bytes - 1;
+  }
+}
+
+void CPU::reset() {
+  reg_a = 0;
+  reg_x = 0;
+  reg_y = 0;
+  sp = STACK_RESET;
+  status = 0b100100;
+  pc = mem_read_u16(0xfffc);
 }
 
 // load operations
@@ -67,29 +88,29 @@ void CPU::op_tsx(AddressingMode) { set_register_x(sp); }
 void CPU::op_txs(AddressingMode) { sp = reg_x; }
 void CPU::op_pha(AddressingMode) { stack_push(reg_a); }
 void CPU::op_php(AddressingMode) {
-  set_flag(flags::BREAK, true);
-  stack_push(status);
+  uint8_t pushed = status | flags::BREAK | flags::UNUSED;
+  stack_push(pushed);
 }
 void CPU::op_pla(AddressingMode) {
   uint8_t data = stack_pop();
   set_register_a(data);
 }
 void CPU::op_plp(AddressingMode) {
-  uint8_t data = stack_pop();
-  status = data;
+  status = stack_pop();
   set_flag(flags::BREAK, false);
+  set_flag(flags::UNUSED, true);
 }
 
-// arithemtic
+// arithmetic
 void CPU::op_adc(AddressingMode mode) {
-    uint16_t addr = get_addr(mode);
-    uint8_t value = bus.mem_read(addr);
-    add_to_register_a(value);
+  uint16_t addr = get_addr(mode);
+  uint8_t value = bus.mem_read(addr);
+  add_to_register_a(value);
 }
 void CPU::op_sbc(AddressingMode mode) {
-    uint16_t addr = get_addr(mode);
-    uint8_t value = bus.mem_read(addr);
-    add_to_register_a(value - 1);
+  uint16_t addr = get_addr(mode);
+  uint8_t value = bus.mem_read(addr);
+  add_to_register_a(static_cast<uint8_t>(~value));
 }
 void CPU::op_cmp(AddressingMode mode) { compare(mode, reg_a); }
 void CPU::op_cpx(AddressingMode mode) { compare(mode, reg_x); }
@@ -224,10 +245,12 @@ void CPU::op_jmp(AddressingMode mode) {
   uint16_t addr = get_addr(mode);
   pc = addr;
 }
+
 void CPU::op_jsr(AddressingMode mode) {
-  uint16_t addr = get_addr(mode);
-  stack_push_u16(addr - 1);
-  pc = addr;
+  uint16_t return_addr = pc + 1;
+  uint16_t target = get_addr(mode);
+  stack_push_u16(return_addr);
+  pc = target;
 }
 void CPU::op_rts(AddressingMode) { pc = stack_pop_u16() + 1; }
 
@@ -251,18 +274,12 @@ void CPU::op_sed(AddressingMode) { set_flag(flags::DECIMAL_MODE, true); }
 void CPU::op_sei(AddressingMode) { set_flag(flags::INTERRUPT_DISABLE, true); }
 
 // system functions
-void CPU::op_brk(AddressingMode) {
-  pc += 1;
-  stack_push_u16(pc);
-  stack_push(status);
-
-  pc = bus.mem_read_u16(INTERRUPT_VECTOR);
-  set_flag(flags::BREAK, true);
-}
+void CPU::op_brk(AddressingMode) { halted = true; }
 void CPU::op_nop(AddressingMode) {}
 void CPU::op_rti(AddressingMode) {
   status = stack_pop();
   set_flag(flags::BREAK, false);
+  set_flag(flags::UNUSED, true);
   pc = stack_pop_u16();
 }
 
@@ -280,17 +297,17 @@ void CPU::set_register_y(uint8_t value) {
   update_zero_and_negative_flags(value);
 }
 void CPU::add_to_register_a(uint8_t value) {
-    uint16_t sum = static_cast<uint16_t>(reg_a) + value;
-    if (get_flag(flags::CARRY)) {
-        sum += 1;
-    }
+  uint16_t sum = static_cast<uint16_t>(reg_a) + value;
+  if (get_flag(flags::CARRY)) {
+    sum += 1;
+  }
 
-    set_flag(flags::CARRY, (sum > 0xff) != 0);
+  set_flag(flags::CARRY, sum > 0xff);
 
-    auto result = static_cast<uint8_t>(sum);
-    set_flag(flags::OVERFLOW, ((value ^ result) & (result ^ reg_a) & 0x80) != 0);
+  auto result = static_cast<uint8_t>(sum);
+  set_flag(flags::OVERFLOW, ((value ^ result) & (result ^ reg_a) & 0x80) != 0);
 
-    set_register_a(result);
+  set_register_a(result);
 }
 
 // flag utils
@@ -301,9 +318,7 @@ void CPU::update_zero_and_negative_flags(uint8_t value) {
   set_flag(flags::ZERO, value == 0);
   set_flag(flags::NEGATIVE, (value >> 7) == 1);
 }
-bool CPU::get_flag(uint8_t mask) {
-    return (status & mask) != 0;
-}
+bool CPU::get_flag(uint8_t mask) { return (status & mask) != 0; }
 
 // stack utils
 void CPU::stack_push(uint8_t data) {
@@ -311,9 +326,8 @@ void CPU::stack_push(uint8_t data) {
   sp -= 1;
 }
 void CPU::stack_push_u16(uint16_t data) {
-  uint8_t low = data & 0xff;
   uint8_t high = data >> 8;
-
+  uint8_t low  = data & 0xff;
   stack_push(high);
   stack_push(low);
 }
@@ -322,35 +336,35 @@ uint8_t CPU::stack_pop() {
   return bus.mem_read(memory_map::STACK_START + static_cast<uint16_t>(sp));
 }
 uint16_t CPU::stack_pop_u16() {
-  auto low = static_cast<uint16_t>(stack_pop());
+  auto low  = static_cast<uint16_t>(stack_pop());
   auto high = static_cast<uint16_t>(stack_pop());
-
   return (high << 8) | low;
 }
 
 // mem utils
 uint8_t CPU::mem_read(uint16_t addr) { return bus.mem_read(addr); }
 uint16_t CPU::mem_read_u16(uint16_t addr) { return bus.mem_read_u16(addr); }
+void CPU::mem_write(uint16_t addr, uint8_t data) { bus.mem_write(addr, data); }
 
 // opcode helpers
 void CPU::branch(AddressingMode mode, bool condition) {
-    uint16_t addr = get_addr(mode);
-    auto jump = static_cast<int8_t>(addr);
-
-    if (condition) {
-        pc += jump;
-    }
+  int8_t offset = get_addr(mode);
+  if (condition) {
+    pc += static_cast<uint16_t>(offset);
+  }
 }
-void CPU::compare(AddressingMode mode, uint8_t compare_with) {
-    uint16_t addr = get_addr(mode);
-    uint8_t data = bus.mem_read(addr);
 
-    set_flag(flags::CARRY, data <= compare_with);
-    update_zero_and_negative_flags(compare_with - data);
+void CPU::compare(AddressingMode mode, uint8_t compare_with) {
+  uint16_t addr = get_addr(mode);
+  uint8_t data = bus.mem_read(addr);
+
+  set_flag(flags::CARRY, data <= compare_with);
+  update_zero_and_negative_flags(compare_with - data);
 }
 
 // additional utils
 uint8_t CPU::fetch_next_byte() { return bus.mem_read(pc++); }
+
 void CPU::write_to_reg_a_or_mem(AddressingMode mode,
                                 std::optional<uint16_t> addr, uint8_t value) {
   if (mode == AddressingMode::Accumulator) {
@@ -359,67 +373,63 @@ void CPU::write_to_reg_a_or_mem(AddressingMode mode,
     if (!addr.has_value()) {
       throw std::runtime_error("failed to extract address");
     }
-
     bus.mem_write(addr.value(), value);
     update_zero_and_negative_flags(value);
   }
 }
+
 uint16_t CPU::get_addr(AddressingMode mode) {
   switch (mode) {
   case Immediate:
     return pc++;
   case Relative:
-    return pc++;
+    return bus.mem_read(pc++);
   case ZeroPage:
     return bus.mem_read(pc++);
   case ZeroPage_X:
-    return bus.mem_read(pc++) + reg_x;
+    return static_cast<uint8_t>(bus.mem_read(pc++) + reg_x);
   case ZeroPage_Y:
-    return bus.mem_read(pc++) + reg_y;
+    return static_cast<uint8_t>(bus.mem_read(pc++) + reg_y);
   case Absolute: {
     uint16_t addr = bus.mem_read_u16(pc);
     pc += 2;
     return addr;
   }
   case Absolute_X: {
-    uint16_t addr = bus.mem_read_u16(pc);
+    uint16_t addr = bus.mem_read_u16(pc) + static_cast<uint16_t>(reg_x);
     pc += 2;
     return addr;
   }
   case Absolute_Y: {
-    uint16_t addr = bus.mem_read_u16(pc++) + static_cast<uint16_t>(reg_y);
+    uint16_t addr = bus.mem_read_u16(pc) + static_cast<uint16_t>(reg_y);
     pc += 2;
     return addr;
   }
   case Indirect: {
     uint16_t ptr = bus.mem_read_u16(pc);
+    pc += 2;
     uint16_t value;
-
-    // checking if it is on page boundary
     if ((ptr & 0x00FF) == 0x00FF) {
-      uint8_t low = bus.mem_read(ptr);
+      uint8_t low  = bus.mem_read(ptr);
       uint8_t high = bus.mem_read(ptr & 0xFF00);
-
-      value = (high << 8) | low;
+      value = (static_cast<uint16_t>(high) << 8) | low;
     } else {
       value = bus.mem_read_u16(ptr);
     }
-
-    pc += 2;
     return value;
   }
   case Indirect_X: {
     uint8_t base = bus.mem_read(pc++);
-    uint8_t zero_page_addr = (base + reg_x) & 0xFF;
-    uint8_t low = bus.mem_read(zero_page_addr);
-    uint8_t high = bus.mem_read((zero_page_addr + 1) & 0xFF);
-    return (high << 8) | low;
+    uint8_t zero_page_addr = static_cast<uint8_t>(base + reg_x);
+    uint8_t low  = bus.mem_read(zero_page_addr);
+    uint8_t high = bus.mem_read(static_cast<uint8_t>(zero_page_addr + 1));
+    return (static_cast<uint16_t>(high) << 8) | low;
   }
   case Indirect_Y: {
     uint8_t zero_page_addr = bus.mem_read(pc++);
-    uint8_t low = bus.mem_read(zero_page_addr);
-    uint8_t high = bus.mem_read((zero_page_addr + 1) & 0xFF);
-    uint16_t base_addr = (high << 8) | low;
+    uint8_t low  = bus.mem_read(zero_page_addr);
+    uint8_t high = bus.mem_read(static_cast<uint8_t>(zero_page_addr + 1));
+    uint16_t base_addr = (static_cast<uint16_t>(high) << 8) | low;
     return base_addr + static_cast<uint16_t>(reg_y);
   }
   default:
