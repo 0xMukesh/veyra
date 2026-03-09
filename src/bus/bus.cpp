@@ -1,5 +1,5 @@
 #include "bus.hpp"
-#include "../constants.hpp"
+#include "cpu/cpu.hpp"
 
 Bus::Bus() {}
 
