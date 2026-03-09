@@ -1,5 +1,4 @@
 #include "cpu.hpp"
-#include "../constants.hpp"
 
 #include <cstdint>
 #include <ios>

@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <cstring>
-#include <span>
 #include <stdexcept>
+#include <span>
 #include <vector>
 
 NesRom parse_rom(std::vector<uint8_t> &bytes) {
