@@ -1,9 +1,11 @@
 # veyra
 
-(wip) a NES emulator, written in CPP
+a tiny NES emulator, written in go.
 
-## resources
+## references
 
-- [writing nes emulator in rust](https://bugzmanov.github.io/nes_ebook/chapter_1.html)
-- [6502 reference](https://www.nesdev.org/obelisk-6502-guide/reference.html)
-- [easy 6502](https://skilldrick.github.io/easy6502/)
+- https://bugzmanov.github.io/nes_ebook/chapter_1.html
+- https://www.nesdev.org/obelisk-6502-guide/reference.html
+- https://skilldrick.github.io/easy6502/
+- https://www.nesdev.org/NESDoc.pdf
+- [NES emulator from scratch - javidx9](https://www.youtube.com/playlist?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf)
