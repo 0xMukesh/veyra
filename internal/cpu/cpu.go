@@ -37,9 +37,6 @@ func (c *CPU) Load(program []uint8) {
 func (c *CPU) Run() {
 	for {
 		opcode := c.bus.Read(c.pc)
-		if opcode == 0x00 {
-			break
-		}
 
 		c.pc += 1
 
@@ -50,7 +47,15 @@ func (c *CPU) Run() {
 		}
 
 		inst.handler(inst.mode)
-		c.pc += uint16(inst.bytes) - 1
+
+		// PC update for relative is handled manually
+		if inst.mode != Relative {
+			c.pc += uint16(inst.bytes) - 1
+		}
+
+		if opcode == 0x00 {
+			break
+		}
 	}
 }
 
@@ -70,6 +75,16 @@ func (c *CPU) getOperandAddress(mode AddressingMode) uint16 {
 		return c.bus.ReadU16(c.pc) + uint16(c.x)
 	case AbsoluteY:
 		return c.bus.ReadU16(c.pc) + uint16(c.y)
+	case Indirect:
+		addr := c.bus.ReadU16(c.pc)
+
+		if addr&0x00ff == 0x00ff {
+			low := c.bus.Read(addr)
+			high := c.bus.Read(addr & 0xff00)
+			return utils.PackToLittleEndian(low, high)
+		} else {
+			return c.bus.ReadU16(addr)
+		}
 	case IndirectX:
 		base := c.bus.Read(c.pc)
 		ptr := base + c.x
@@ -90,17 +105,8 @@ func (c *CPU) getOperandAddress(mode AddressingMode) uint16 {
 }
 
 func (c *CPU) updateZeroAndNegativeFlags(result uint8) {
-	if result == 0 {
-		c.status.Set(ZeroFlag)
-	} else {
-		c.status.Clear(ZeroFlag)
-	}
-
-	if result&(1<<7) != 0 {
-		c.status.Set(NegativeFlag)
-	} else {
-		c.status.Clear(NegativeFlag)
-	}
+	c.status.UpdateCond(ZeroFlag, result == 0)
+	c.status.UpdateCond(NegativeFlag, result&uint8(NegativeFlag) != 0)
 }
 
 func (c *CPU) addToRegisterA(data uint8) {
@@ -114,7 +120,7 @@ func (c *CPU) addToRegisterA(data uint8) {
 
 	result := uint8(sum)
 
-	hadOverflow := (data^result)&(result^c.a)&0x80 != 0
+	hadOverflow := (data^result)&(result^c.a)&(1<<7) != 0
 	c.status.UpdateCond(OverflowFlag, hadOverflow)
 
 	c.a = result
@@ -129,12 +135,36 @@ func (c *CPU) compare(mode AddressingMode, compareWith uint8) {
 	c.updateZeroAndNegativeFlags(compareWith - value)
 }
 
+func (c *CPU) branch(condition bool) {
+	if condition {
+		jump := int8(c.bus.Read(c.pc))
+		// "+ 1" is to jump over the offset operand
+		dest := c.pc + 1 + uint16(jump)
+
+		c.pc = dest
+	}
+}
+
 func (c *CPU) stackPush(data uint8) {
 	c.bus.Write(constants.STACK_START+uint16(c.sp), data)
 	c.sp--
 }
 
+func (c *CPU) stackPushU16(data uint16) {
+	high := uint8(data & 0xff00)
+	low := uint8(data & 0x00ff)
+
+	c.stackPush(high)
+	c.stackPush(low)
+}
+
 func (c *CPU) stackPop() uint8 {
 	c.sp++
 	return c.bus.Read(constants.STACK_START + uint16(c.sp))
+}
+
+func (c *CPU) stackPopU16() uint16 {
+	low := c.stackPop()
+	high := c.stackPop()
+	return utils.PackToLittleEndian(low, high)
 }

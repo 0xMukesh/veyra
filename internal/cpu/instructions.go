@@ -165,6 +165,57 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 
 		0xca: NewInstruction("DEX", Implicit, 1, c.dex),
 		0x88: NewInstruction("DEY", Implicit, 1, c.dey),
+
+		0x0a: NewInstruction("ASL", Accumulator, 1, c.asl),
+		0x06: NewInstruction("ASL", ZeroPage, 2, c.asl),
+		0x16: NewInstruction("ASL", ZeroPageX, 2, c.asl),
+		0x0e: NewInstruction("ASL", Absolute, 3, c.asl),
+		0x1e: NewInstruction("ASL", AbsoluteX, 3, c.asl),
+
+		0x4a: NewInstruction("LSR", Accumulator, 1, c.lsr),
+		0x46: NewInstruction("LSR", ZeroPage, 2, c.lsr),
+		0x56: NewInstruction("LSR", ZeroPageX, 2, c.lsr),
+		0x4e: NewInstruction("LSR", Absolute, 3, c.lsr),
+		0x5e: NewInstruction("LSR", AbsoluteX, 3, c.lsr),
+
+		0x2a: NewInstruction("ROL", Accumulator, 1, c.rol),
+		0x26: NewInstruction("ROL", ZeroPage, 2, c.rol),
+		0x36: NewInstruction("ROL", ZeroPageX, 2, c.rol),
+		0x2e: NewInstruction("ROL", Absolute, 3, c.rol),
+		0x3e: NewInstruction("ROL", AbsoluteX, 3, c.rol),
+
+		0x6a: NewInstruction("ROR", Accumulator, 1, c.ror),
+		0x66: NewInstruction("ROR", ZeroPage, 2, c.ror),
+		0x76: NewInstruction("ROR", ZeroPageX, 2, c.ror),
+		0x6e: NewInstruction("ROR", Absolute, 3, c.ror),
+		0x7e: NewInstruction("ROR", AbsoluteX, 3, c.ror),
+
+		0x4c: NewInstruction("JMP", Absolute, 3, c.jmp),
+		0x6c: NewInstruction("JMP", Indirect, 3, c.jmp),
+
+		0x20: NewInstruction("JSR", Absolute, 3, c.jsr),
+		0x60: NewInstruction("RTS", Implicit, 1, c.rts),
+
+		0x90: NewInstruction("BCC", Relative, 2, c.bcc),
+		0xb0: NewInstruction("BCS", Relative, 2, c.bcs),
+		0xf0: NewInstruction("BEQ", Relative, 2, c.beq),
+		0x30: NewInstruction("BMI", Relative, 2, c.bmi),
+		0xd0: NewInstruction("BNE", Relative, 2, c.bne),
+		0x10: NewInstruction("BPL", Relative, 2, c.bpl),
+		0x50: NewInstruction("BVC", Relative, 2, c.bvc),
+		0x70: NewInstruction("BVS", Relative, 2, c.bvs),
+
+		0x18: NewInstruction("CLC", Implicit, 1, c.clc),
+		0xd8: NewInstruction("CLD", Implicit, 1, c.cld),
+		0x58: NewInstruction("CLI", Implicit, 1, c.cli),
+		0xb8: NewInstruction("CLV", Implicit, 1, c.clv),
+		0x38: NewInstruction("SEC", Implicit, 1, c.sec),
+		0xf8: NewInstruction("SED", Implicit, 1, c.sed),
+		0x78: NewInstruction("SEI", Implicit, 1, c.sei),
+
+		0x00: NewInstruction("BRK", Implicit, 1, c.brk),
+		0xea: NewInstruction("NOP", Implicit, 1, c.nop),
+		0x40: NewInstruction("RTI", Implicit, 1, c.rti),
 	}
 }
 
@@ -241,6 +292,8 @@ func (c *CPU) pha(AddressingMode) {
 }
 
 func (c *CPU) php(AddressingMode) {
+	c.status.Set(UnusedFlag)
+	c.status.Set(BreakFlag)
 	c.stackPush(uint8(*c.status))
 }
 
@@ -251,6 +304,8 @@ func (c *CPU) pla(AddressingMode) {
 
 func (c *CPU) plp(AddressingMode) {
 	*c.status = ProcessorStatus(c.stackPop())
+	c.status.Clear(BreakFlag)
+	c.status.Set(UnusedFlag)
 }
 
 func (c *CPU) and(mode AddressingMode) {
@@ -355,4 +410,194 @@ func (c *CPU) dex(AddressingMode) {
 func (c *CPU) dey(AddressingMode) {
 	c.y--
 	c.updateZeroAndNegativeFlags(c.y)
+}
+
+func (c *CPU) asl(mode AddressingMode) {
+	addr := uint16(0)
+	value := c.a
+
+	if mode != Accumulator {
+		addr = c.getOperandAddress(mode)
+		value = c.bus.Read(addr)
+	}
+
+	c.status.UpdateCond(CarryFlag, value>>7 != 0)
+	value <<= 1
+
+	if mode != Accumulator {
+		c.bus.Write(addr, value)
+	} else {
+		c.a = value
+	}
+
+	c.updateZeroAndNegativeFlags(value)
+}
+
+func (c *CPU) lsr(mode AddressingMode) {
+	addr := uint16(0)
+	value := c.a
+
+	if mode != Accumulator {
+		addr = c.getOperandAddress(mode)
+		value = c.bus.Read(addr)
+	}
+
+	c.status.UpdateCond(CarryFlag, value&1 != 0)
+	value >>= 1
+
+	if mode != Accumulator {
+		c.bus.Write(addr, value)
+	} else {
+		c.a = value
+	}
+
+	c.updateZeroAndNegativeFlags(value)
+}
+
+func (c *CPU) rol(mode AddressingMode) {
+	addr := uint16(0)
+	value := c.a
+
+	if mode != Accumulator {
+		addr = c.getOperandAddress(mode)
+		value = c.bus.Read(addr)
+	}
+
+	isCarrySet := c.status.Has(CarryFlag)
+
+	c.status.UpdateCond(CarryFlag, value>>7 != 0)
+	value <<= 1
+
+	if isCarrySet {
+		value |= 1
+	}
+
+	if mode != Accumulator {
+		c.bus.Write(addr, value)
+	} else {
+		c.a = value
+	}
+
+	c.updateZeroAndNegativeFlags(value)
+}
+
+func (c *CPU) ror(mode AddressingMode) {
+	addr := uint16(0)
+	value := c.a
+
+	if mode != Accumulator {
+		addr = c.getOperandAddress(mode)
+		value = c.bus.Read(addr)
+	}
+
+	isCarrySet := c.status.Has(CarryFlag)
+
+	c.status.UpdateCond(CarryFlag, value&1 != 0)
+	value >>= 1
+
+	if isCarrySet {
+		value |= (1 << 7)
+	}
+
+	if mode != Accumulator {
+		c.bus.Write(addr, value)
+	} else {
+		c.a = value
+	}
+
+	c.updateZeroAndNegativeFlags(value)
+}
+
+func (c *CPU) jmp(mode AddressingMode) {
+	addr := c.getOperandAddress(mode)
+	c.pc = addr
+}
+
+func (c *CPU) jsr(mode AddressingMode) {
+	// [1]: 0x8000: JSR $c000
+	// 0x8003: NEXT_INSTRUCTION
+	// PC = 0xc000 (target memory address)
+	// 0x8003 - 1 = 0x8002 is pushed to the stack
+	// [2]: at the end of the subroutine, RTS is used which pops out the return point from stack
+	// RTS: PC = 0x8002 (popped from stack) + 1
+	addr := c.getOperandAddress(mode)
+	c.stackPushU16(c.pc - 1)
+	c.pc = addr
+}
+
+func (c *CPU) rts(AddressingMode) {
+	c.pc = c.stackPopU16() + 1
+}
+
+func (c *CPU) bcc(AddressingMode) {
+	c.branch(!c.status.Has(CarryFlag))
+}
+
+func (c *CPU) bcs(AddressingMode) {
+	c.branch(c.status.Has(CarryFlag))
+}
+
+func (c *CPU) beq(AddressingMode) {
+	c.branch(c.status.Has(ZeroFlag))
+}
+
+func (c *CPU) bmi(AddressingMode) {
+	c.branch(c.status.Has(NegativeFlag))
+}
+
+func (c *CPU) bne(AddressingMode) {
+	c.branch(!c.status.Has(ZeroFlag))
+}
+
+func (c *CPU) bpl(AddressingMode) {
+	c.branch(!c.status.Has(NegativeFlag))
+}
+
+func (c *CPU) bvc(AddressingMode) {
+	c.branch(!c.status.Has(OverflowFlag))
+}
+
+func (c *CPU) bvs(AddressingMode) {
+	c.branch(c.status.Has(OverflowFlag))
+}
+
+func (c *CPU) clc(AddressingMode) {
+	c.status.Clear(CarryFlag)
+}
+
+func (c *CPU) cld(AddressingMode) {
+	c.status.Clear(DecimalModeFlag)
+}
+
+func (c *CPU) cli(AddressingMode) {
+	c.status.Clear(InterruptFlag)
+}
+
+func (c *CPU) clv(AddressingMode) {
+	c.status.Clear(OverflowFlag)
+}
+
+func (c *CPU) sec(AddressingMode) {
+	c.status.Set(CarryFlag)
+}
+
+func (c *CPU) sed(AddressingMode) {
+	c.status.Set(DecimalModeFlag)
+}
+
+func (c *CPU) sei(AddressingMode) {
+	c.status.Set(InterruptFlag)
+}
+
+func (c *CPU) brk(AddressingMode) {
+	c.status.Set(BreakFlag)
+}
+
+func (c *CPU) nop(AddressingMode) {}
+
+func (c *CPU) rti(AddressingMode) {
+	*c.status = ProcessorStatus(c.stackPop())
+	c.status.Clear(BreakFlag)
+	c.status.Set(UnusedFlag)
+	c.pc = c.stackPopU16()
 }
