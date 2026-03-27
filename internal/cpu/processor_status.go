@@ -13,18 +13,27 @@ const (
 	NegativeFlag    ProcessorStatus = (1 << 7)
 )
 
-func NewStatus() ProcessorStatus {
-	return UnusedFlag
+func NewStatus() *ProcessorStatus {
+	initialValue := UnusedFlag
+	return &initialValue
 }
 
-func (p ProcessorStatus) Set(flag ProcessorStatus) {
-	p |= flag
+func (p *ProcessorStatus) Set(flag ProcessorStatus) {
+	*p |= flag
 }
 
-func (p ProcessorStatus) Clear(flag ProcessorStatus) {
-	p &^= flag
+func (p *ProcessorStatus) Clear(flag ProcessorStatus) {
+	*p &^= flag
 }
 
-func (p ProcessorStatus) Has(flag ProcessorStatus) bool {
-	return p&flag != 0
+func (p *ProcessorStatus) Has(flag ProcessorStatus) bool {
+	return *p&flag != 0
+}
+
+func (p *ProcessorStatus) UpdateCond(flag ProcessorStatus, cond bool) {
+	if cond {
+		p.Set(flag)
+	} else {
+		p.Clear(flag)
+	}
 }

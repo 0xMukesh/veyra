@@ -3,6 +3,7 @@ package bus
 import (
 	"log/slog"
 
+	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/utils"
 )
 
@@ -19,10 +20,10 @@ func New() *Bus {
 
 func (b *Bus) Read(addr uint16) uint8 {
 	switch {
-	case addr <= 0x1FFF:
-		return b.cpuVRam[addr&0x07FF]
-	case addr >= 0x8000:
-		addr -= 0x8000
+	case addr <= constants.CPU_RAM_MIRRORS_END:
+		return b.cpuVRam[addr&constants.CPU_RAM_END]
+	case addr >= constants.PRGROM_START:
+		addr -= constants.PRGROM_START
 		return b.prgRom[addr]
 	default:
 		slog.Warn("unhandled read", slog.Uint64("addr", uint64(addr)))
@@ -33,12 +34,12 @@ func (b *Bus) Read(addr uint16) uint8 {
 func (b *Bus) ReadU16(addr uint16) uint16 {
 	low := b.Read(addr)
 	high := b.Read(addr + 1)
-	return utils.PackToLittleEndian(high, low)
+	return utils.PackToLittleEndian(low, high)
 }
 
 func (b *Bus) Write(addr uint16, data uint8) {
-	if addr <= 0x1fff {
-		addr = addr & 0x07ff
+	if addr <= constants.CPU_RAM_MIRRORS_END {
+		addr = addr & constants.CPU_RAM_END
 		b.cpuVRam[addr] = data
 	} else {
 		slog.Warn("ignoring memory write access", slog.Uint64("address", uint64(addr)))
