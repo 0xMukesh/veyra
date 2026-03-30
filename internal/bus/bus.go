@@ -26,7 +26,7 @@ func (b *Bus) Read(addr uint16) uint8 {
 		addr -= constants.PRGROM_START
 		return b.prgRom[addr]
 	default:
-		slog.Warn("unhandled read", slog.Uint64("addr", uint64(addr)))
+		slog.Warn("unhandled read", slog.String("addr", utils.ToHexadecimalString(addr)))
 		return 0
 	}
 }
@@ -42,8 +42,16 @@ func (b *Bus) Write(addr uint16, data uint8) {
 		addr = addr & constants.CPU_RAM_END
 		b.cpuVRam[addr] = data
 	} else {
-		slog.Warn("ignoring memory write access", slog.Uint64("address", uint64(addr)))
+		slog.Warn("ignoring memory write access", slog.String("address", utils.ToHexadecimalString(addr)))
 	}
+}
+
+func (b *Bus) WriteU16(addr uint16, data uint16) {
+	low := uint8(data & 0x00ff)
+	high := uint8(data >> 8)
+
+	b.Write(addr, low)
+	b.Write(addr+1, high)
 }
 
 func (b *Bus) LoadProgram(program []uint8) {

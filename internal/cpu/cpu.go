@@ -29,9 +29,9 @@ func New() *CPU {
 	}
 }
 
-func (c *CPU) Load(program []uint8) {
+func (c *CPU) Load(program []uint8, entrypoint uint16) {
 	c.bus.LoadProgram(program)
-	c.pc = 0x8000
+	c.pc = entrypoint
 }
 
 func (c *CPU) Run() {
@@ -151,7 +151,7 @@ func (c *CPU) stackPush(data uint8) {
 }
 
 func (c *CPU) stackPushU16(data uint16) {
-	high := uint8(data & 0xff00)
+	high := uint8(data >> 8)
 	low := uint8(data & 0x00ff)
 
 	c.stackPush(high)
