@@ -4,29 +4,30 @@ import (
 	"log/slog"
 
 	"github.com/0xmukesh/veyra/internal/constants"
+	"github.com/0xmukesh/veyra/internal/memory"
 	"github.com/0xmukesh/veyra/internal/utils"
 )
 
 type Bus struct {
-	cpuVRam [2 * 1024]uint8
-	prgRom  []uint8
+	ram    *memory.RAM
+	mapper memory.Mapper
 }
 
-func New() *Bus {
+func New(mapper memory.Mapper) *Bus {
 	return &Bus{
-		cpuVRam: [2 * 1024]uint8{0},
+		ram:    memory.NewRam(2 * 1024),
+		mapper: mapper,
 	}
 }
 
 func (b *Bus) Read(addr uint16) uint8 {
 	switch {
 	case addr <= constants.CPU_RAM_MIRRORS_END:
-		return b.cpuVRam[addr&constants.CPU_RAM_END]
+		return b.ram.Read(addr)
 	case addr >= constants.PRGROM_START:
-		addr -= constants.PRGROM_START
-		return b.prgRom[addr]
+		return b.mapper.Read(addr)
 	default:
-		slog.Warn("unhandled read", slog.String("addr", utils.ToHexadecimalString(addr)))
+		slog.Warn("unhandled read", slog.String("addr", utils.ToHexadecimalString(addr, 4)))
 		return 0
 	}
 }
@@ -40,9 +41,9 @@ func (b *Bus) ReadU16(addr uint16) uint16 {
 func (b *Bus) Write(addr uint16, data uint8) {
 	if addr <= constants.CPU_RAM_MIRRORS_END {
 		addr = addr & constants.CPU_RAM_END
-		b.cpuVRam[addr] = data
+		b.ram.Write(addr, data)
 	} else {
-		slog.Warn("ignoring memory write access", slog.String("address", utils.ToHexadecimalString(addr)))
+		slog.Warn("ignoring memory write access", slog.String("address", utils.ToHexadecimalString(addr, 4)))
 	}
 }
 
@@ -52,8 +53,4 @@ func (b *Bus) WriteU16(addr uint16, data uint16) {
 
 	b.Write(addr, low)
 	b.Write(addr+1, high)
-}
-
-func (b *Bus) LoadProgram(program []uint8) {
-	b.prgRom = program
 }

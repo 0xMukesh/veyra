@@ -220,7 +220,7 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 }
 
 func (c *CPU) lda(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.a = value
@@ -228,7 +228,7 @@ func (c *CPU) lda(mode AddressingMode) {
 }
 
 func (c *CPU) ldx(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.x = value
@@ -236,7 +236,7 @@ func (c *CPU) ldx(mode AddressingMode) {
 }
 
 func (c *CPU) ldy(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.y = value
@@ -244,17 +244,17 @@ func (c *CPU) ldy(mode AddressingMode) {
 }
 
 func (c *CPU) sta(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	c.bus.Write(addr, c.a)
 }
 
 func (c *CPU) stx(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	c.bus.Write(addr, c.x)
 }
 
 func (c *CPU) sty(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	c.bus.Write(addr, c.y)
 }
 
@@ -309,7 +309,7 @@ func (c *CPU) plp(AddressingMode) {
 }
 
 func (c *CPU) and(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.a = c.a & value
@@ -317,7 +317,7 @@ func (c *CPU) and(mode AddressingMode) {
 }
 
 func (c *CPU) eor(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.a = c.a ^ value
@@ -325,7 +325,7 @@ func (c *CPU) eor(mode AddressingMode) {
 }
 
 func (c *CPU) ora(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.a = c.a | value
@@ -333,7 +333,7 @@ func (c *CPU) ora(mode AddressingMode) {
 }
 
 func (c *CPU) bit(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	and := c.a & value
@@ -344,14 +344,14 @@ func (c *CPU) bit(mode AddressingMode) {
 }
 
 func (c *CPU) adc(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.addToRegisterA(value)
 }
 
 func (c *CPU) sbc(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	// [1]: X - Y  = X + twos complement of Y
@@ -375,7 +375,7 @@ func (c *CPU) cpy(mode AddressingMode) {
 }
 
 func (c *CPU) inc(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 	value++
 
@@ -394,7 +394,7 @@ func (c *CPU) iny(AddressingMode) {
 }
 
 func (c *CPU) dec(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 	value--
 
@@ -417,7 +417,7 @@ func (c *CPU) asl(mode AddressingMode) {
 	value := c.a
 
 	if mode != Accumulator {
-		addr = c.getOperandAddress(mode)
+		addr = c.getOperandAddress(mode, c.pc)
 		value = c.bus.Read(addr)
 	}
 
@@ -438,7 +438,7 @@ func (c *CPU) lsr(mode AddressingMode) {
 	value := c.a
 
 	if mode != Accumulator {
-		addr = c.getOperandAddress(mode)
+		addr = c.getOperandAddress(mode, c.pc)
 		value = c.bus.Read(addr)
 	}
 
@@ -459,7 +459,7 @@ func (c *CPU) rol(mode AddressingMode) {
 	value := c.a
 
 	if mode != Accumulator {
-		addr = c.getOperandAddress(mode)
+		addr = c.getOperandAddress(mode, c.pc)
 		value = c.bus.Read(addr)
 	}
 
@@ -486,7 +486,7 @@ func (c *CPU) ror(mode AddressingMode) {
 	value := c.a
 
 	if mode != Accumulator {
-		addr = c.getOperandAddress(mode)
+		addr = c.getOperandAddress(mode, c.pc)
 		value = c.bus.Read(addr)
 	}
 
@@ -509,7 +509,7 @@ func (c *CPU) ror(mode AddressingMode) {
 }
 
 func (c *CPU) jmp(mode AddressingMode) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	c.pc = addr
 }
 
@@ -520,7 +520,7 @@ func (c *CPU) jsr(mode AddressingMode) {
 	// 0x8003 - 1 = 0x8002 is pushed to the stack
 	// [2]: at the end of the subroutine, RTS is used which pops out the return point from stack
 	// RTS: PC = 0x8002 (popped from stack) + 1
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	c.stackPushU16(c.pc - 1)
 	c.pc = addr
 }
@@ -591,6 +591,7 @@ func (c *CPU) sei(AddressingMode) {
 
 func (c *CPU) brk(AddressingMode) {
 	c.status.Set(BreakFlag)
+	c.halted = true
 }
 
 func (c *CPU) nop(AddressingMode) {}

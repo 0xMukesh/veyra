@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/0xmukesh/veyra/internal/bus"
+	"github.com/0xmukesh/veyra/internal/cartridge"
 	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/utils"
 )
@@ -17,83 +18,81 @@ type CPU struct {
 	y      uint8
 	status *ProcessorStatus
 	bus    *bus.Bus
+	halted bool
 }
 
-func New() *CPU {
+func New(cartridge *cartridge.Cartridge, entrypoint uint16) *CPU {
 	return &CPU{
-		pc:     0,
+		pc:     entrypoint,
 		sp:     constants.STACK_RESET,
 		a:      0,
 		status: NewStatus(),
-		bus:    bus.New(),
+		bus:    bus.New(cartridge.Mapper()),
+		halted: false,
 	}
 }
 
-func (c *CPU) Load(program []uint8, entrypoint uint16) {
-	c.bus.LoadProgram(program)
-	c.pc = entrypoint
-}
+func (c *CPU) Step(trace bool) {
+	opcode := c.bus.Read(c.pc)
+	if trace {
+		c.trace(opcode)
+	}
 
-func (c *CPU) Run() {
-	for {
-		opcode := c.bus.Read(c.pc)
+	c.pc++
+	pcAfterFetch := c.pc
 
-		c.pc += 1
+	inst, ok := c.Instructions()[opcode]
+	if !ok {
+		slog.Warn("unknown instruction", slog.String("opcode", fmt.Sprintf("0x%O2x", opcode)))
+		return
+	}
 
-		inst, ok := c.Instructions()[opcode]
-		if !ok {
-			slog.Warn("unknown instruction", slog.String("opcode", fmt.Sprintf("0x%O2x", opcode)))
-			continue
-		}
+	inst.handler(inst.mode)
 
-		inst.handler(inst.mode)
-
-		// PC update for relative is handled manually
-		if inst.mode != Relative {
-			c.pc += uint16(inst.bytes) - 1
-		}
-
-		if opcode == 0x00 {
-			break
-		}
+	if inst.mode != Relative && c.pc == pcAfterFetch {
+		c.pc += uint16(inst.bytes) - 1
 	}
 }
 
-func (c *CPU) getOperandAddress(mode AddressingMode) uint16 {
+func (c *CPU) IsHalted() bool {
+	return c.halted
+}
+
+func (c *CPU) getOperandAddress(mode AddressingMode, addr uint16) uint16 {
 	switch mode {
 	case Immediate:
 		return c.pc
 	case ZeroPage:
-		return uint16(c.bus.Read(c.pc))
+		return uint16(c.bus.Read(addr))
 	case ZeroPageX:
-		return uint16(c.bus.Read(c.pc) + c.x)
+		return uint16(c.bus.Read(addr) + c.x)
 	case ZeroPageY:
-		return uint16(c.bus.Read(c.pc) + c.y)
+		return uint16(c.bus.Read(addr) + c.y)
 	case Absolute:
-		return c.bus.ReadU16(c.pc)
+		return c.bus.ReadU16(addr)
 	case AbsoluteX:
-		return c.bus.ReadU16(c.pc) + uint16(c.x)
+		return c.bus.ReadU16(addr) + uint16(c.x)
 	case AbsoluteY:
-		return c.bus.ReadU16(c.pc) + uint16(c.y)
+		return c.bus.ReadU16(addr) + uint16(c.y)
 	case Indirect:
-		addr := c.bus.ReadU16(c.pc)
+		base := c.bus.ReadU16(addr)
 
-		if addr&0x00ff == 0x00ff {
-			low := c.bus.Read(addr)
-			high := c.bus.Read(addr & 0xff00)
+		if base&0x00ff == 0x00ff {
+			low := c.bus.Read(base)
+			high := c.bus.Read(base & 0xff00)
 			return utils.PackToLittleEndian(low, high)
 		} else {
-			return c.bus.ReadU16(addr)
+			return c.bus.ReadU16(base)
 		}
 	case IndirectX:
-		base := c.bus.Read(c.pc)
+		base := c.bus.Read(addr)
 		ptr := base + c.x
 		low := c.bus.Read(uint16(ptr))
 		high := c.bus.Read(uint16(ptr + 1))
 
 		return utils.PackToLittleEndian(low, high)
 	case IndirectY:
-		base := c.bus.Read(c.pc)
+		base := c.bus.Read(addr)
 		low := c.bus.Read(uint16(base))
 		high := c.bus.Read(uint16(base + 1))
 		deref := utils.PackToLittleEndian(low, high)
@@ -128,7 +127,7 @@ func (c *CPU) addToRegisterA(data uint8) {
 }
 
 func (c *CPU) compare(mode AddressingMode, compareWith uint8) {
-	addr := c.getOperandAddress(mode)
+	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
 	c.status.UpdateCond(CarryFlag, compareWith >= value)
