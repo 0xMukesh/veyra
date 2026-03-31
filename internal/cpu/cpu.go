@@ -1,8 +1,8 @@
 package cpu
 
 import (
-	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/0xmukesh/veyra/internal/bus"
 	"github.com/0xmukesh/veyra/internal/cartridge"
@@ -43,13 +43,14 @@ func (c *CPU) Step(trace bool) {
 
 	inst, ok := c.Instructions()[opcode]
 	if !ok {
-		slog.Warn("unknown instruction", slog.String("opcode", fmt.Sprintf("0x%O2x", opcode)))
+		slog.Error("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
+		os.Exit(1)
 		return
 	}
 
 	inst.handler(inst.mode)
 
-	if inst.mode != Relative && c.pc == pcAfterFetch {
+	if c.pc == pcAfterFetch {
 		c.pc += uint16(inst.bytes) - 1
 	}
 }
@@ -97,7 +98,7 @@ func (c *CPU) getOperandAddress(mode AddressingMode, addr uint16) uint16 {
 		high := c.bus.Read(uint16(base + 1))
 		deref := utils.PackToLittleEndian(low, high)
 
-		return uint16(c.bus.Read(deref))
+		return deref + uint16(c.y)
 	default:
 		return 0
 	}

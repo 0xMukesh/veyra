@@ -514,14 +514,8 @@ func (c *CPU) jmp(mode AddressingMode) {
 }
 
 func (c *CPU) jsr(mode AddressingMode) {
-	// [1]: 0x8000: JSR $c000
-	// 0x8003: NEXT_INSTRUCTION
-	// PC = 0xc000 (target memory address)
-	// 0x8003 - 1 = 0x8002 is pushed to the stack
-	// [2]: at the end of the subroutine, RTS is used which pops out the return point from stack
-	// RTS: PC = 0x8002 (popped from stack) + 1
 	addr := c.getOperandAddress(mode, c.pc)
-	c.stackPushU16(c.pc - 1)
+	c.stackPushU16(c.pc + 1)
 	c.pc = addr
 }
 

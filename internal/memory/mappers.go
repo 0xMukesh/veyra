@@ -1,6 +1,8 @@
 package memory
 
-import "github.com/0xmukesh/veyra/internal/constants"
+import (
+	"github.com/0xmukesh/veyra/internal/constants"
+)
 
 type Mapper interface {
 	Read(addr uint16) uint8
@@ -12,10 +14,6 @@ type NROM struct {
 }
 
 func NewNROM(prg []uint8) *NROM {
-	if len(prg) != 0x8000 {
-		panic("NROM (no mirroring) requires 32KB PRG ROM")
-	}
-
 	return &NROM{prg: prg}
 }
 
@@ -24,7 +22,8 @@ func (m *NROM) Read(addr uint16) uint8 {
 		return 0
 	}
 
-	return m.prg[addr-constants.PRGROM_START]
+	index := (addr - constants.PRGROM_START) & uint16(len(m.prg)-1)
+	return m.prg[index]
 }
 
 func (m *NROM) Write(addr uint16, data uint8) {

@@ -8,7 +8,7 @@ type Integer interface {
 }
 
 func PackToLittleEndian(low, high uint8) uint16 {
-	return (uint16(high) << 8) | uint16(low)
+	return (uint16(low)) | uint16(high)<<8
 }
 
 func ToHexadecimalString[T Integer](v T, padding int) string {

@@ -14,7 +14,7 @@ const (
 )
 
 func NewStatus() *ProcessorStatus {
-	initialValue := UnusedFlag
+	initialValue := UnusedFlag | InterruptFlag
 	return &initialValue
 }
 

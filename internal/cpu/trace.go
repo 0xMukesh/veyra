@@ -3,6 +3,7 @@ package cpu
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/0xmukesh/veyra/internal/utils"
@@ -13,7 +14,8 @@ func (c *CPU) trace(opcode uint8) {
 
 	inst, ok := c.Instructions()[opcode]
 	if !ok {
-		slog.Warn("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
+		slog.Error("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
+		os.Exit(1)
 		return
 	}
 
@@ -50,7 +52,7 @@ func (c *CPU) trace(opcode uint8) {
 			disassembledArgs = fmt.Sprintf("(%02X,Y) @ %02X = %04X = %02X", operand, operand+c.x, operandAddr, storedValue)
 		case Relative:
 			offset := int8(operand)
-			target := uint16(int32(c.pc) + int32(offset))
+			target := uint16(int32(begin+2) + int32(offset))
 			disassembledArgs = fmt.Sprintf("$%04X", target)
 		default:
 			slog.Warn("unknown addressing mode with 2 opcodes length", slog.Int("mode", int(inst.mode)))
@@ -68,7 +70,7 @@ func (c *CPU) trace(opcode uint8) {
 
 		switch inst.mode {
 		case Absolute:
-			if opcode == 0x4c {
+			if opcode == 0x4c || opcode == 0x20 {
 				disassembledArgs = fmt.Sprintf("$%04X", operand)
 			} else {
 				disassembledArgs = fmt.Sprintf("$%04X = %02X", operandAddr, storedValue)
