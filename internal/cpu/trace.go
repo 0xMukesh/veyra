@@ -47,9 +47,9 @@ func (c *CPU) trace(opcode uint8) {
 		case ZeroPageY:
 			disassembledArgs = fmt.Sprintf("$%02X,Y @ %02X = %02X", operand, operandAddr, storedValue)
 		case IndirectX:
-			disassembledArgs = fmt.Sprintf("(%02X,X) @ %02X = %04X = %02X", operand, operand+c.x, operandAddr, storedValue)
+			disassembledArgs = fmt.Sprintf("($%02X,X) @ %02X = %04X = %02X", operand, operand+c.x, operandAddr, storedValue)
 		case IndirectY:
-			disassembledArgs = fmt.Sprintf("(%02X,Y) @ %02X = %04X = %02X", operand, operand+c.x, operandAddr, storedValue)
+			disassembledArgs = fmt.Sprintf("($%02X),Y = %04X @ %04X = %02X", operand, operandAddr-uint16(c.y), operandAddr, storedValue)
 		case Relative:
 			offset := int8(operand)
 			target := uint16(int32(begin+2) + int32(offset))
@@ -85,10 +85,23 @@ func (c *CPU) trace(opcode uint8) {
 	}
 
 	pcStr := fmt.Sprintf("%04X", begin)
-	hexDumpStr := fmt.Sprintf("%-8s", strings.Join(hexDump, " "))
-	disassembledStr := fmt.Sprintf("%-32s", inst.mnemonic+" "+disassembledArgs)
+	hexDumpStr := strings.Join(hexDump, " ")
+	disassembledStr := fmt.Sprintf("%-31s", inst.mnemonic+" "+disassembledArgs)
 	registersStr := fmt.Sprintf("A:%02X X:%02X Y:%02X P:%02X SP:%02X", c.a, c.x, c.y, *c.status, c.sp)
 
-	line := fmt.Sprintf("%s  %s  %s  %s", pcStr, hexDumpStr, disassembledStr, registersStr)
+	isUnofficial := inst.mnemonic[0] == '*'
+
+	var line string
+	if isUnofficial {
+		cleanMnemonic := inst.mnemonic[1:]
+		disassembledStr = fmt.Sprintf("%-31s", cleanMnemonic+" "+disassembledArgs)
+
+		hexDumpStr = fmt.Sprintf("%-9s", hexDumpStr)
+		line = fmt.Sprintf("%s  %s*%s %s", pcStr, hexDumpStr, disassembledStr, registersStr)
+	} else {
+		hexDumpStr = fmt.Sprintf("%-10s", hexDumpStr)
+		line = fmt.Sprintf("%s  %s%s %s", pcStr, hexDumpStr, disassembledStr, registersStr)
+	}
+
 	fmt.Println(line)
 }
