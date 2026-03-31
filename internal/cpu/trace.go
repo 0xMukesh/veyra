@@ -86,7 +86,7 @@ func (c *CPU) trace(opcode uint8) {
 
 	pcStr := fmt.Sprintf("%04X", begin)
 	hexDumpStr := fmt.Sprintf("%-8s", strings.Join(hexDump, " "))
-	disassembledStr := fmt.Sprintf("%-47s", inst.mnemonic+" "+disassembledArgs)
+	disassembledStr := fmt.Sprintf("%-32s", inst.mnemonic+" "+disassembledArgs)
 	registersStr := fmt.Sprintf("A:%02X X:%02X Y:%02X P:%02X SP:%02X", c.a, c.x, c.y, *c.status, c.sp)
 
 	line := fmt.Sprintf("%s  %s  %s  %s", pcStr, hexDumpStr, disassembledStr, registersStr)

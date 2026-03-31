@@ -127,6 +127,15 @@ func (c *CPU) addToRegisterA(data uint8) {
 	c.updateZeroAndNegativeFlags(c.a)
 }
 
+func (c *CPU) subFromRegisterA(data uint8) {
+	// [1]: X - Y  = X + twos complement of Y
+	// twos complement of Y = ones complement of Y + 1
+	// ones complement of Y = ~Y
+	// -Y = twos complement of Y = ~Y + 1
+	// [2]: SBC = A - M - (1 - C) = A + (-M) - 1 + C = A + ~M + 1 - 1 + C = A + ~M + C
+	c.addToRegisterA(uint8(-int8(data) - 1))
+}
+
 func (c *CPU) compare(mode AddressingMode, compareWith uint8) {
 	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)

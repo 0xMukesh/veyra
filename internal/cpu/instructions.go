@@ -25,6 +25,12 @@ type Instruction struct {
 	handler  func(AddressingMode)
 }
 
+func dropReturn[T any](f func(AddressingMode) T) func(AddressingMode) {
+	return func(mode AddressingMode) {
+		_ = f(mode)
+	}
+}
+
 func NewInstruction(mnemonic string, mode AddressingMode, bytes int, handler func(AddressingMode)) Instruction {
 	return Instruction{
 		mnemonic: mnemonic,
@@ -125,6 +131,7 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 		0x71: NewInstruction("ADC", IndirectY, 2, c.adc),
 
 		0xe9: NewInstruction("SBC", Immediate, 2, c.sbc),
+		0xeb: NewInstruction("SBC", Immediate, 2, c.sbc),
 		0xe5: NewInstruction("SBC", ZeroPage, 2, c.sbc),
 		0xf5: NewInstruction("SBC", ZeroPageX, 2, c.sbc),
 		0xed: NewInstruction("SBC", Absolute, 3, c.sbc),
@@ -150,10 +157,10 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 		0xc4: NewInstruction("CPY", ZeroPage, 2, c.cpy),
 		0xcc: NewInstruction("CPY", Absolute, 3, c.cpy),
 
-		0xe6: NewInstruction("INC", ZeroPage, 2, c.inc),
-		0xf6: NewInstruction("INC", ZeroPageX, 2, c.inc),
-		0xee: NewInstruction("INC", Absolute, 3, c.inc),
-		0xfe: NewInstruction("INC", AbsoluteX, 3, c.inc),
+		0xe6: NewInstruction("INC", ZeroPage, 2, dropReturn(c.inc)),
+		0xf6: NewInstruction("INC", ZeroPageX, 2, dropReturn(c.inc)),
+		0xee: NewInstruction("INC", Absolute, 3, dropReturn(c.inc)),
+		0xfe: NewInstruction("INC", AbsoluteX, 3, dropReturn(c.inc)),
 
 		0xe8: NewInstruction("INX", Implicit, 1, c.inx),
 		0xc8: NewInstruction("INY", Implicit, 1, c.iny),
@@ -166,29 +173,29 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 		0xca: NewInstruction("DEX", Implicit, 1, c.dex),
 		0x88: NewInstruction("DEY", Implicit, 1, c.dey),
 
-		0x0a: NewInstruction("ASL", Accumulator, 1, c.asl),
-		0x06: NewInstruction("ASL", ZeroPage, 2, c.asl),
-		0x16: NewInstruction("ASL", ZeroPageX, 2, c.asl),
-		0x0e: NewInstruction("ASL", Absolute, 3, c.asl),
-		0x1e: NewInstruction("ASL", AbsoluteX, 3, c.asl),
+		0x0a: NewInstruction("ASL", Accumulator, 1, dropReturn(c.asl)),
+		0x06: NewInstruction("ASL", ZeroPage, 2, dropReturn(c.asl)),
+		0x16: NewInstruction("ASL", ZeroPageX, 2, dropReturn(c.asl)),
+		0x0e: NewInstruction("ASL", Absolute, 3, dropReturn(c.asl)),
+		0x1e: NewInstruction("ASL", AbsoluteX, 3, dropReturn(c.asl)),
 
-		0x4a: NewInstruction("LSR", Accumulator, 1, c.lsr),
-		0x46: NewInstruction("LSR", ZeroPage, 2, c.lsr),
-		0x56: NewInstruction("LSR", ZeroPageX, 2, c.lsr),
-		0x4e: NewInstruction("LSR", Absolute, 3, c.lsr),
-		0x5e: NewInstruction("LSR", AbsoluteX, 3, c.lsr),
+		0x4a: NewInstruction("LSR", Accumulator, 1, dropReturn(c.lsr)),
+		0x46: NewInstruction("LSR", ZeroPage, 2, dropReturn(c.lsr)),
+		0x56: NewInstruction("LSR", ZeroPageX, 2, dropReturn(c.lsr)),
+		0x4e: NewInstruction("LSR", Absolute, 3, dropReturn(c.lsr)),
+		0x5e: NewInstruction("LSR", AbsoluteX, 3, dropReturn(c.lsr)),
 
-		0x2a: NewInstruction("ROL", Accumulator, 1, c.rol),
-		0x26: NewInstruction("ROL", ZeroPage, 2, c.rol),
-		0x36: NewInstruction("ROL", ZeroPageX, 2, c.rol),
-		0x2e: NewInstruction("ROL", Absolute, 3, c.rol),
-		0x3e: NewInstruction("ROL", AbsoluteX, 3, c.rol),
+		0x2a: NewInstruction("ROL", Accumulator, 1, dropReturn(c.rol)),
+		0x26: NewInstruction("ROL", ZeroPage, 2, dropReturn(c.rol)),
+		0x36: NewInstruction("ROL", ZeroPageX, 2, dropReturn(c.rol)),
+		0x2e: NewInstruction("ROL", Absolute, 3, dropReturn(c.rol)),
+		0x3e: NewInstruction("ROL", AbsoluteX, 3, dropReturn(c.rol)),
 
-		0x6a: NewInstruction("ROR", Accumulator, 1, c.ror),
-		0x66: NewInstruction("ROR", ZeroPage, 2, c.ror),
-		0x76: NewInstruction("ROR", ZeroPageX, 2, c.ror),
-		0x6e: NewInstruction("ROR", Absolute, 3, c.ror),
-		0x7e: NewInstruction("ROR", AbsoluteX, 3, c.ror),
+		0x6a: NewInstruction("ROR", Accumulator, 1, dropReturn(c.ror)),
+		0x66: NewInstruction("ROR", ZeroPage, 2, dropReturn(c.ror)),
+		0x76: NewInstruction("ROR", ZeroPageX, 2, dropReturn(c.ror)),
+		0x6e: NewInstruction("ROR", Absolute, 3, dropReturn(c.ror)),
+		0x7e: NewInstruction("ROR", AbsoluteX, 3, dropReturn(c.ror)),
 
 		0x4c: NewInstruction("JMP", Absolute, 3, c.jmp),
 		0x6c: NewInstruction("JMP", Indirect, 3, c.jmp),
@@ -216,6 +223,129 @@ func (c *CPU) Instructions() map[uint8]Instruction {
 		0x00: NewInstruction("BRK", Implicit, 1, c.brk),
 		0xea: NewInstruction("NOP", Implicit, 1, c.nop),
 		0x40: NewInstruction("RTI", Implicit, 1, c.rti),
+
+		// unofficial opcodes
+		0x0b: NewInstruction("*ANC", Immediate, 2, c.anc),
+		0x2b: NewInstruction("*ANC", Immediate, 2, c.anc),
+
+		0x87: NewInstruction("*AXS", ZeroPage, 2, c.axs),
+		0x97: NewInstruction("*AXS", ZeroPageY, 2, c.axs),
+		0x83: NewInstruction("*AXS", IndirectX, 2, c.axs),
+		0x8f: NewInstruction("*AXS", Absolute, 3, c.axs),
+
+		0x6b: NewInstruction("*ARR", Immediate, 2, c.arr),
+		0x4b: NewInstruction("*ALR", Immediate, 2, c.alr),
+		0xab: NewInstruction("*OAL", Immediate, 2, c.oal),
+
+		0x9f: NewInstruction("*AXA", AbsoluteY, 3, c.axa),
+		0x93: NewInstruction("*AXA", IndirectY, 2, c.axa),
+
+		0xcb: NewInstruction("*SAX", Immediate, 2, c.sax),
+
+		0xc7: NewInstruction("*DCM", ZeroPage, 2, c.dcm),
+		0xd7: NewInstruction("*DCM", ZeroPageX, 2, c.dcm),
+		0xcf: NewInstruction("*DCM", Absolute, 3, c.dcm),
+		0xdf: NewInstruction("*DCM", AbsoluteX, 3, c.dcm),
+		0xdb: NewInstruction("*DCM", AbsoluteY, 3, c.dcm),
+		0xc3: NewInstruction("*DCM", IndirectX, 2, c.dcm),
+		0xd3: NewInstruction("*DCM", IndirectY, 2, c.dcm),
+
+		0x04: NewInstruction("*SKB", ZeroPage, 2, c.nop),
+		0x14: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+		0x34: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+		0x44: NewInstruction("*SKB", ZeroPage, 2, c.nop),
+		0x54: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+		0x64: NewInstruction("*SKB", ZeroPage, 2, c.nop),
+		0x74: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+		0x80: NewInstruction("*SKB", Immediate, 2, c.nop),
+		0x82: NewInstruction("*SKB", Immediate, 2, c.nop),
+		0x89: NewInstruction("*SKB", Immediate, 2, c.nop),
+		0xc2: NewInstruction("*SKB", Immediate, 2, c.nop),
+		0xd4: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+		0xe2: NewInstruction("*SKB", Immediate, 2, c.nop),
+		0xf4: NewInstruction("*SKB", ZeroPageX, 2, c.nop),
+
+		0xe7: NewInstruction("*INS", ZeroPage, 2, c.ins),
+		0xf7: NewInstruction("*INS", ZeroPageX, 2, c.ins),
+		0xef: NewInstruction("*INS", Absolute, 3, c.ins),
+		0xff: NewInstruction("*INS", AbsoluteX, 3, c.ins),
+		0xfb: NewInstruction("*INS", AbsoluteY, 3, c.ins),
+		0xe3: NewInstruction("*INS", IndirectX, 2, c.ins),
+		0xf3: NewInstruction("*INS", IndirectY, 2, c.ins),
+
+		0x02: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x12: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x22: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x32: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x42: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x52: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x62: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x72: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0x92: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0xb2: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0xd2: NewInstruction("*HLT", Implicit, 1, c.nop),
+		0xf2: NewInstruction("*HLT", Implicit, 1, c.nop),
+
+		0xbb: NewInstruction("*LAS", AbsoluteY, 3, c.las),
+
+		0xa7: NewInstruction("*LAX", ZeroPage, 2, c.lax),
+		0xb7: NewInstruction("*LAX", ZeroPageY, 2, c.lax),
+		0xaf: NewInstruction("*LAX", Absolute, 3, c.lax),
+		0xbf: NewInstruction("*LAX", AbsoluteY, 3, c.lax),
+		0xa3: NewInstruction("*LAX", AbsoluteY, 3, c.lax),
+		0xb3: NewInstruction("*LAX", IndirectX, 2, c.lax),
+
+		0x1a: NewInstruction("*NOP", Implicit, 1, c.nop),
+		0x3a: NewInstruction("*NOP", Implicit, 1, c.nop),
+		0x5a: NewInstruction("*NOP", Implicit, 1, c.nop),
+		0x7a: NewInstruction("*NOP", Implicit, 1, c.nop),
+		0xda: NewInstruction("*NOP", Implicit, 1, c.nop),
+		0xfa: NewInstruction("*NOP", Implicit, 1, c.nop),
+
+		0x27: NewInstruction("*RLA", ZeroPage, 2, c.rla),
+		0x37: NewInstruction("*RLA", ZeroPageX, 2, c.rla),
+		0x2f: NewInstruction("*RLA", Absolute, 3, c.rla),
+		0x3f: NewInstruction("*RLA", AbsoluteX, 3, c.rla),
+		0x3b: NewInstruction("*RLA", AbsoluteY, 3, c.rla),
+		0x23: NewInstruction("*RLA", IndirectX, 2, c.rla),
+		0x33: NewInstruction("*RLA", IndirectY, 2, c.rla),
+
+		0x67: NewInstruction("*RRA", ZeroPage, 2, c.rra),
+		0x77: NewInstruction("*RRA", ZeroPageX, 2, c.rra),
+		0x6f: NewInstruction("*RRA", Absolute, 3, c.rra),
+		0x7f: NewInstruction("*RRA", AbsoluteX, 3, c.rra),
+		0x7b: NewInstruction("*RRA", AbsoluteY, 3, c.rra),
+		0x63: NewInstruction("*RRA", IndirectX, 2, c.rra),
+		0x73: NewInstruction("*RRA", IndirectY, 2, c.rra),
+
+		0x07: NewInstruction("*ASO", ZeroPage, 2, c.aso),
+		0x17: NewInstruction("*ASO", ZeroPageX, 2, c.aso),
+		0x0f: NewInstruction("*ASO", Absolute, 3, c.aso),
+		0x1f: NewInstruction("*ASO", AbsoluteX, 3, c.aso),
+		0x1b: NewInstruction("*ASO", AbsoluteY, 3, c.aso),
+		0x03: NewInstruction("*ASO", IndirectX, 2, c.aso),
+		0x13: NewInstruction("*ASO", IndirectY, 2, c.aso),
+
+		0x47: NewInstruction("*LSE", ZeroPage, 2, c.lse),
+		0x57: NewInstruction("*LSE", ZeroPageX, 2, c.lse),
+		0x4f: NewInstruction("*LSE", Absolute, 3, c.lse),
+		0x5f: NewInstruction("*LSE", AbsoluteX, 3, c.lse),
+		0x5b: NewInstruction("*LSE", AbsoluteY, 3, c.lse),
+		0x43: NewInstruction("*LSE", IndirectX, 2, c.lse),
+		0x53: NewInstruction("*LSE", IndirectY, 2, c.lse),
+
+		0x0c: NewInstruction("*SKW", Absolute, 3, c.nop),
+		0x1c: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0x3c: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0x5c: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0x7c: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0xdc: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0xfc: NewInstruction("*SKW", AbsoluteX, 3, c.nop),
+		0x8b: NewInstruction("*XAA", Immediate, 2, c.nop), // NOTE: exact operation is unknown
+
+		0x9e: NewInstruction("*XAS", AbsoluteY, 3, c.xas),
+		0x9c: NewInstruction("*SAY", AbsoluteX, 3, c.say),
+		0x9b: NewInstruction("*TAS", AbsoluteY, 3, c.tas),
 	}
 }
 
@@ -354,12 +484,7 @@ func (c *CPU) sbc(mode AddressingMode) {
 	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 
-	// [1]: X - Y  = X + twos complement of Y
-	// twos complement of Y = ones complement of Y + 1
-	// ones complement of Y = ~Y
-	// -Y = twos complement of Y = ~Y + 1
-	// [2]: SBC = A - M - (1 - C) = A + (-M) - 1 + C = A + ~M + 1 - 1 + C = A + ~M + C
-	c.addToRegisterA(uint8(-int8(value) - 1))
+	c.subFromRegisterA(value)
 }
 
 func (c *CPU) cmp(mode AddressingMode) {
@@ -374,13 +499,14 @@ func (c *CPU) cpy(mode AddressingMode) {
 	c.compare(mode, c.y)
 }
 
-func (c *CPU) inc(mode AddressingMode) {
+func (c *CPU) inc(mode AddressingMode) uint8 {
 	addr := c.getOperandAddress(mode, c.pc)
 	value := c.bus.Read(addr)
 	value++
 
 	c.bus.Write(addr, value)
 	c.updateZeroAndNegativeFlags(value)
+	return value
 }
 
 func (c *CPU) inx(AddressingMode) {
@@ -412,7 +538,7 @@ func (c *CPU) dey(AddressingMode) {
 	c.updateZeroAndNegativeFlags(c.y)
 }
 
-func (c *CPU) asl(mode AddressingMode) {
+func (c *CPU) asl(mode AddressingMode) uint8 {
 	addr := uint16(0)
 	value := c.a
 
@@ -431,9 +557,10 @@ func (c *CPU) asl(mode AddressingMode) {
 	}
 
 	c.updateZeroAndNegativeFlags(value)
+	return value
 }
 
-func (c *CPU) lsr(mode AddressingMode) {
+func (c *CPU) lsr(mode AddressingMode) uint8 {
 	addr := uint16(0)
 	value := c.a
 
@@ -452,9 +579,10 @@ func (c *CPU) lsr(mode AddressingMode) {
 	}
 
 	c.updateZeroAndNegativeFlags(value)
+	return value
 }
 
-func (c *CPU) rol(mode AddressingMode) {
+func (c *CPU) rol(mode AddressingMode) uint8 {
 	addr := uint16(0)
 	value := c.a
 
@@ -479,9 +607,10 @@ func (c *CPU) rol(mode AddressingMode) {
 	}
 
 	c.updateZeroAndNegativeFlags(value)
+	return value
 }
 
-func (c *CPU) ror(mode AddressingMode) {
+func (c *CPU) ror(mode AddressingMode) uint8 {
 	addr := uint16(0)
 	value := c.a
 
@@ -506,6 +635,7 @@ func (c *CPU) ror(mode AddressingMode) {
 	}
 
 	c.updateZeroAndNegativeFlags(value)
+	return value
 }
 
 func (c *CPU) jmp(mode AddressingMode) {
@@ -595,4 +725,148 @@ func (c *CPU) rti(AddressingMode) {
 	c.status.Clear(BreakFlag)
 	c.status.Set(UnusedFlag)
 	c.pc = c.stackPopU16()
+}
+
+func (c *CPU) anc(mode AddressingMode) {
+	c.and(Accumulator)
+	c.status.UpdateCond(CarryFlag, c.status.Has(NegativeFlag))
+}
+
+func (c *CPU) axs(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+
+	result := c.x & c.a
+	c.bus.Write(addr, result)
+	c.updateZeroAndNegativeFlags(result)
+}
+
+func (c *CPU) arr(mode AddressingMode) {
+	c.and(Accumulator)
+	c.rol(Accumulator)
+	result := c.a
+
+	isBit5Set := (result>>5)&1 != 0
+	isBit6Set := (result>>6)&1 != 0
+
+	if isBit5Set && isBit6Set {
+		c.status.Set(CarryFlag)
+		c.status.Clear(OverflowFlag)
+	} else if !isBit5Set && !isBit6Set {
+		c.status.Clear(CarryFlag)
+		c.status.Clear(OverflowFlag)
+	} else if isBit5Set && !isBit6Set {
+		c.status.Set(OverflowFlag)
+		c.status.Clear(CarryFlag)
+	} else {
+		c.status.Set(CarryFlag)
+		c.status.Set(OverflowFlag)
+	}
+}
+
+func (c *CPU) alr(mode AddressingMode) {
+	c.and(Accumulator)
+	c.lsr(Accumulator)
+}
+
+func (c *CPU) oal(mode AddressingMode) {
+	c.and(Accumulator)
+	c.x = c.a
+}
+
+func (c *CPU) axa(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	result := c.a & c.x & uint8(addr>>8)
+
+	c.bus.Write(addr, result)
+}
+
+func (c *CPU) sax(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	value := c.bus.Read(addr)
+
+	xAndA := c.x & c.a
+	result := xAndA - value
+
+	c.status.UpdateCond(CarryFlag, xAndA >= value)
+
+	c.x = result
+	c.updateZeroAndNegativeFlags(result)
+}
+
+func (c *CPU) dcm(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	data := c.bus.Read(addr)
+	data--
+
+	c.status.UpdateCond(CarryFlag, c.a >= data)
+	c.updateZeroAndNegativeFlags(c.a - data)
+}
+
+func (c *CPU) ins(mode AddressingMode) {
+	data := c.inc(mode)
+	c.subFromRegisterA(data)
+}
+
+func (c *CPU) las(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	data := c.bus.Read(addr)
+
+	result := c.sp & data
+	c.a = result
+	c.x = result
+	c.sp = result
+	c.updateZeroAndNegativeFlags(result)
+}
+
+func (c *CPU) lax(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	data := c.bus.Read(addr)
+
+	c.a = data
+	c.x = data
+	c.updateZeroAndNegativeFlags(data)
+}
+
+func (c *CPU) rla(mode AddressingMode) {
+	data := c.rol(mode)
+	c.a &= data
+	c.updateZeroAndNegativeFlags(c.a)
+}
+
+func (c *CPU) rra(mode AddressingMode) {
+	data := c.ror(mode)
+	c.addToRegisterA(data)
+}
+
+func (c *CPU) aso(mode AddressingMode) {
+	data := c.asl(mode)
+	c.a |= data
+	c.updateZeroAndNegativeFlags(c.a)
+}
+
+func (c *CPU) lse(mode AddressingMode) {
+	data := c.lsr(mode)
+	c.a ^= data
+	c.updateZeroAndNegativeFlags(c.a)
+}
+
+func (c *CPU) xas(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	result := c.x & (uint8(addr>>8) + 1)
+	c.bus.Write(addr, result)
+}
+
+func (c *CPU) say(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+	result := c.y & (uint8(addr>>8) + 1)
+	c.bus.Write(addr, result)
+}
+
+func (c *CPU) tas(mode AddressingMode) {
+	addr := c.getOperandAddress(mode, c.pc)
+
+	c.sp = c.x & c.a
+	result := c.sp & (uint8(addr>>8) + 1)
+
+	c.bus.Write(addr, result)
 }
