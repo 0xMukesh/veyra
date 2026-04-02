@@ -1,5 +1,9 @@
 #!/usr/bin/fish
 
+go test -v ./internal/cpu/ \
+| grep 'A:' \
+> ./output/cpu_test.log
+
 awk 'NR==FNR {a[NR]=$0; next}
      {
        if (a[FNR] != $0) {

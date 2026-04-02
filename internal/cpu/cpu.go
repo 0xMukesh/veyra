@@ -17,7 +17,7 @@ type CPU struct {
 	x      uint8
 	y      uint8
 	status *ProcessorStatus
-	bus    *bus.Bus
+	bus    *bus.CpuBus
 	halted bool
 }
 
@@ -27,7 +27,7 @@ func New(cartridge *cartridge.Cartridge, entrypoint uint16) *CPU {
 		sp:     constants.STACK_RESET,
 		a:      0,
 		status: NewStatus(),
-		bus:    bus.New(cartridge.Mapper()),
+		bus:    bus.NewCpuBus(cartridge.Mapper()),
 		halted: false,
 	}
 }

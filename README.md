@@ -1,6 +1,6 @@
 # veyra
 
-a tiny NES emulator, written in go.
+a tiny NES emulator, written in golang
 
 ## references
 

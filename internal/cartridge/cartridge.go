@@ -64,6 +64,10 @@ func New(raw []byte) (*Cartridge, error) {
 	}, nil
 }
 
+func (c *Cartridge) ReadChrRom(addr uint16) uint8 {
+	return c.chrRom[addr]
+}
+
 func (c *Cartridge) Mapper() memory.Mapper {
 	switch c.mapper {
 	case 0:

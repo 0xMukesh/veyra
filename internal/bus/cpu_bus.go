@@ -8,46 +8,46 @@ import (
 	"github.com/0xmukesh/veyra/internal/utils"
 )
 
-type Bus struct {
+type CpuBus struct {
 	ram    *memory.RAM
 	mapper memory.Mapper
 }
 
-func New(mapper memory.Mapper) *Bus {
-	return &Bus{
+func NewCpuBus(mapper memory.Mapper) *CpuBus {
+	return &CpuBus{
 		ram:    memory.NewRam(2 * 1024),
 		mapper: mapper,
 	}
 }
 
-func (b *Bus) Read(addr uint16) uint8 {
+func (b *CpuBus) Read(addr uint16) uint8 {
 	switch {
 	case addr <= constants.CPU_RAM_MIRRORS_END:
 		return b.ram.Read(addr)
 	case addr >= constants.PRGROM_START:
 		return b.mapper.Read(addr)
 	default:
-		slog.Warn("unhandled read", slog.String("addr", utils.ToHexadecimalString(addr, 4)))
+		slog.Warn("unhandled cpu bus read", slog.String("addr", utils.ToHexadecimalString(addr, 4)))
 		return 0
 	}
 }
 
-func (b *Bus) ReadU16(addr uint16) uint16 {
+func (b *CpuBus) ReadU16(addr uint16) uint16 {
 	low := b.Read(addr)
 	high := b.Read(addr + 1)
 	return utils.PackToLittleEndian(low, high)
 }
 
-func (b *Bus) Write(addr uint16, data uint8) {
+func (b *CpuBus) Write(addr uint16, data uint8) {
 	if addr <= constants.CPU_RAM_MIRRORS_END {
 		addr = addr & constants.CPU_RAM_END
 		b.ram.Write(addr, data)
 	} else {
-		slog.Warn("ignoring memory write access", slog.String("address", utils.ToHexadecimalString(addr, 4)))
+		slog.Warn("ignoring memory write access on cpu bus", slog.String("address", utils.ToHexadecimalString(addr, 4)))
 	}
 }
 
-func (b *Bus) WriteU16(addr uint16, data uint16) {
+func (b *CpuBus) WriteU16(addr uint16, data uint16) {
 	low := uint8(data & 0x00ff)
 	high := uint8(data >> 8)
 
