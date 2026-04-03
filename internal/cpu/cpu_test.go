@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/0xmukesh/veyra/internal/bus"
 	"github.com/0xmukesh/veyra/internal/cartridge"
 )
 
@@ -19,7 +20,8 @@ func TestCpu(t *testing.T) {
 		panic(fmt.Errorf("failed to initialize cartridge: %w", err))
 	}
 
-	cpu := New(cartridge, 0xc000)
+	bus := bus.NewCpuBus(cartridge)
+	cpu := New(bus, 0xc000)
 
 	for !cpu.IsHalted() {
 		cpu.Step(true)

@@ -64,6 +64,10 @@ func New(raw []byte) (*Cartridge, error) {
 	}, nil
 }
 
+func (c *Cartridge) Mirroring() Mirroring {
+	return c.mirroring
+}
+
 func (c *Cartridge) ReadChrRom(addr uint16) uint8 {
 	return c.chrRom[addr]
 }

@@ -3,27 +3,45 @@ package bus
 import (
 	"log/slog"
 
+	"github.com/0xmukesh/veyra/internal/cartridge"
 	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/memory"
 	"github.com/0xmukesh/veyra/internal/utils"
 )
 
+type PpuRegisters interface {
+	ReadRegister(addr uint16) uint8
+	WriteRegister(addr uint16, data uint8)
+}
+
 type CpuBus struct {
 	ram    *memory.RAM
 	mapper memory.Mapper
+	ppu    PpuRegisters
 }
 
-func NewCpuBus(mapper memory.Mapper) *CpuBus {
+func NewCpuBus(cartridge *cartridge.Cartridge) *CpuBus {
 	return &CpuBus{
 		ram:    memory.NewRam(2 * 1024),
-		mapper: mapper,
+		mapper: cartridge.Mapper(),
 	}
+}
+
+func (b *CpuBus) AttachPpu(ppu PpuRegisters) {
+	b.ppu = ppu
 }
 
 func (b *CpuBus) Read(addr uint16) uint8 {
 	switch {
 	case addr <= constants.CPU_RAM_MIRRORS_END:
 		return b.ram.Read(addr)
+	case addr >= constants.PPU_START && addr <= constants.PPU_END:
+		if b.ppu != nil {
+			return b.ppu.ReadRegister(addr)
+		} else {
+			slog.Warn("ppu is not connected to cpu bus")
+			return 0
+		}
 	case addr >= constants.PRGROM_START:
 		return b.mapper.Read(addr)
 	default:
@@ -39,10 +57,17 @@ func (b *CpuBus) ReadU16(addr uint16) uint16 {
 }
 
 func (b *CpuBus) Write(addr uint16, data uint8) {
-	if addr <= constants.CPU_RAM_MIRRORS_END {
-		addr = addr & constants.CPU_RAM_END
+	switch {
+	case addr <= constants.CPU_RAM_MIRRORS_END:
+		addr &= constants.CPU_RAM_END
 		b.ram.Write(addr, data)
-	} else {
+	case addr >= constants.PPU_START && addr <= constants.PPU_END:
+		if b.ppu != nil {
+			b.ppu.WriteRegister(addr, data)
+		} else {
+			slog.Warn("ppu is not connected")
+		}
+	default:
 		slog.Warn("ignoring memory write access on cpu bus", slog.String("address", utils.ToHexadecimalString(addr, 4)))
 	}
 }

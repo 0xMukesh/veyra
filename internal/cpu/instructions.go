@@ -1,5 +1,7 @@
 package cpu
 
+import "github.com/0xmukesh/veyra/internal/helpers"
+
 type AddressingMode int
 
 const (
@@ -434,7 +436,7 @@ func (c *CPU) pla(AddressingMode) {
 }
 
 func (c *CPU) plp(AddressingMode) {
-	*c.status = ProcessorStatus(c.stackPop())
+	*c.status = helpers.Bitflags(c.stackPop())
 	c.status.Clear(BreakFlag)
 	c.status.Set(UnusedFlag)
 }
@@ -722,7 +724,7 @@ func (c *CPU) brk(AddressingMode) {
 func (c *CPU) nop(AddressingMode) {}
 
 func (c *CPU) rti(AddressingMode) {
-	*c.status = ProcessorStatus(c.stackPop())
+	*c.status = helpers.Bitflags(c.stackPop())
 	c.status.Clear(BreakFlag)
 	c.status.Set(UnusedFlag)
 	c.pc = c.stackPopU16()

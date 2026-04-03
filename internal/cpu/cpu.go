@@ -5,9 +5,20 @@ import (
 	"os"
 
 	"github.com/0xmukesh/veyra/internal/bus"
-	"github.com/0xmukesh/veyra/internal/cartridge"
 	"github.com/0xmukesh/veyra/internal/constants"
+	"github.com/0xmukesh/veyra/internal/helpers"
 	"github.com/0xmukesh/veyra/internal/utils"
+)
+
+const (
+	CarryFlag       = helpers.Bitflags(1 << 0)
+	ZeroFlag        = helpers.Bitflags(1 << 1)
+	InterruptFlag   = helpers.Bitflags(1 << 2)
+	DecimalModeFlag = helpers.Bitflags(1 << 3) // unused
+	BreakFlag       = helpers.Bitflags(1 << 4)
+	UnusedFlag      = helpers.Bitflags(1 << 5)
+	OverflowFlag    = helpers.Bitflags(1 << 6)
+	NegativeFlag    = helpers.Bitflags(1 << 7)
 )
 
 type CPU struct {
@@ -16,18 +27,18 @@ type CPU struct {
 	a      uint8
 	x      uint8
 	y      uint8
-	status *ProcessorStatus
+	status *helpers.Bitflags
 	bus    *bus.CpuBus
 	halted bool
 }
 
-func New(cartridge *cartridge.Cartridge, entrypoint uint16) *CPU {
+func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
 	return &CPU{
 		pc:     entrypoint,
 		sp:     constants.STACK_RESET,
 		a:      0,
-		status: NewStatus(),
-		bus:    bus.NewCpuBus(cartridge.Mapper()),
+		status: helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptFlag)),
+		bus:    bus,
 		halted: false,
 	}
 }

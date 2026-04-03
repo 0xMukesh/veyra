@@ -28,8 +28,38 @@ func (b *PpuBus) Read(addr uint16) uint8 {
 	switch {
 	case addr < 0x2000:
 		return b.cartridge.ReadChrRom(addr)
+	case addr >= 0x2000 && addr <= 0x2fff:
+		return b.vram.Read(b.mirrorVRamAddr(addr))
 	default:
 		slog.Warn("unhandled ppu bus read", slog.String("addr", utils.ToHexadecimalString(addr, 4)))
 		return 0
+	}
+}
+
+// Horizontal:
+//   [ A ] [ a ]
+//   [ B ] [ b ]
+
+// Vertical:
+//
+//	[ A ] [ B ]
+//	[ a ] [ b ]
+func (b *PpuBus) mirrorVRamAddr(addr uint16) uint16 {
+	addr &= 0x2fff
+	physicalVRamAddr := addr - 0x2000
+	nameTableIndex := physicalVRamAddr / 0x400
+	mirroring := b.cartridge.Mirroring()
+
+	switch {
+	case mirroring == cartridge.Vertical && (nameTableIndex == 2 || nameTableIndex == 3):
+		return physicalVRamAddr - 0x800
+	case mirroring == cartridge.Horizontal && nameTableIndex == 2:
+		return physicalVRamAddr - 0x400
+	case mirroring == cartridge.Horizontal && nameTableIndex == 1:
+		return physicalVRamAddr - 0x400
+	case mirroring == cartridge.Horizontal && nameTableIndex == 3:
+		return physicalVRamAddr - 0x800
+	default:
+		return physicalVRamAddr
 	}
 }
