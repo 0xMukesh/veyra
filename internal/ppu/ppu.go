@@ -112,7 +112,7 @@ func (p *PPU) readPpuData() uint8 {
 
 func (p *PPU) updatePpuAddr(data uint8) {
 	if !p.w {
-		// bit-14 is forced to be 0 while writing high byte
+		// bit 14 is forced to be 0 while writing high byte
 		p.t = (p.t & 0xff) | ((uint16(data) & 0b0011_1111) << 8)
 	} else {
 		p.t = ((p.t & 0b0111_1111_0000_0000) | uint16(data)) & 0x3fff

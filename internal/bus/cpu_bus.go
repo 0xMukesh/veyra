@@ -1,6 +1,7 @@
 package bus
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/0xmukesh/veyra/internal/cartridge"
@@ -18,6 +19,8 @@ type CpuBus struct {
 	ram    *memory.RAM
 	mapper memory.Mapper
 	ppu    PpuRegisters
+
+	cycles int
 }
 
 func NewCpuBus(cartridge *cartridge.Cartridge) *CpuBus {
@@ -29,6 +32,10 @@ func NewCpuBus(cartridge *cartridge.Cartridge) *CpuBus {
 
 func (b *CpuBus) AttachPpu(ppu PpuRegisters) {
 	b.ppu = ppu
+}
+
+func (b *CpuBus) Tick(cycles int) {
+	b.cycles += cycles
 }
 
 func (b *CpuBus) Read(addr uint16) uint8 {
@@ -67,6 +74,8 @@ func (b *CpuBus) Write(addr uint16, data uint8) {
 		} else {
 			slog.Warn("ppu is not connected")
 		}
+	case addr >= constants.PRGROM_START:
+		panic(fmt.Sprintf("attempt to write to cartidge ROM space - 0x%04x", addr))
 	default:
 		slog.Warn("ignoring memory write access on cpu bus", slog.String("address", utils.ToHexadecimalString(addr, 4)))
 	}

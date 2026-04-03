@@ -36,14 +36,15 @@ func (b *PpuBus) Read(addr uint16) uint8 {
 	}
 }
 
-// Horizontal:
-//   [ A ] [ a ]
-//   [ B ] [ b ]
-
-// Vertical:
+// vertical:
 //
 //	[ A ] [ B ]
 //	[ a ] [ b ]
+
+// horizontal:
+//
+//	[ A ] [ a ]
+//	[ B ] [ b ]
 func (b *PpuBus) mirrorVRamAddr(addr uint16) uint16 {
 	addr &= 0x2fff
 	physicalVRamAddr := addr - 0x2000

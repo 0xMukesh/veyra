@@ -29,21 +29,26 @@ type CPU struct {
 	y      uint8
 	status *helpers.Bitflags
 	bus    *bus.CpuBus
-	halted bool
+
+	halted      bool
+	extraCycles int
 }
 
 func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
 	return &CPU{
-		pc:     entrypoint,
-		sp:     constants.STACK_RESET,
-		a:      0,
-		status: helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptFlag)),
-		bus:    bus,
-		halted: false,
+		pc:          entrypoint,
+		sp:          constants.STACK_RESET,
+		a:           0,
+		status:      helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptFlag)),
+		bus:         bus,
+		halted:      false,
+		extraCycles: 0,
 	}
 }
 
 func (c *CPU) Step(trace bool) {
+	c.extraCycles = 0
+
 	opcode := c.bus.Read(c.pc)
 	if trace {
 		c.trace(opcode)
@@ -60,6 +65,7 @@ func (c *CPU) Step(trace bool) {
 	}
 
 	inst.handler(inst.mode)
+	c.bus.Tick(inst.baseCycles + c.extraCycles)
 
 	if c.pc == pcAfterFetch {
 		c.pc += uint16(inst.bytes) - 1
@@ -70,31 +76,35 @@ func (c *CPU) IsHalted() bool {
 	return c.halted
 }
 
-func (c *CPU) getOperandAddress(mode AddressingMode, addr uint16) uint16 {
+func (c *CPU) resolveAddress(mode AddressingMode, addr uint16) (uint16, bool) {
 	switch mode {
 	case Immediate:
-		return c.pc
+		return c.pc, false
 	case ZeroPage:
-		return uint16(c.bus.Read(addr))
+		return uint16(c.bus.Read(addr)), false
 	case ZeroPageX:
-		return uint16(c.bus.Read(addr) + c.x)
+		return uint16(c.bus.Read(addr) + c.x), false
 	case ZeroPageY:
-		return uint16(c.bus.Read(addr) + c.y)
+		return uint16(c.bus.Read(addr) + c.y), false
 	case Absolute:
-		return c.bus.ReadU16(addr)
+		return c.bus.ReadU16(addr), false
 	case AbsoluteX:
-		return c.bus.ReadU16(addr) + uint16(c.x)
+		base := c.bus.ReadU16(addr)
+		effective := base + uint16(c.x)
+		return effective, (base & 0xff00) != (effective & 0xff00)
 	case AbsoluteY:
-		return c.bus.ReadU16(addr) + uint16(c.y)
+		base := c.bus.ReadU16(addr)
+		effective := base + uint16(c.y)
+		return effective, (base & 0xff00) != (effective & 0xff00)
 	case Indirect:
 		base := c.bus.ReadU16(addr)
 
 		if base&0x00ff == 0x00ff {
 			low := c.bus.Read(base)
 			high := c.bus.Read(base & 0xff00)
-			return utils.PackToLittleEndian(low, high)
+			return utils.PackToLittleEndian(low, high), false
 		} else {
-			return c.bus.ReadU16(base)
+			return c.bus.ReadU16(base), false
 		}
 	case IndirectX:
 		base := c.bus.Read(addr)
@@ -102,19 +112,35 @@ func (c *CPU) getOperandAddress(mode AddressingMode, addr uint16) uint16 {
 		low := c.bus.Read(uint16(ptr))
 		high := c.bus.Read(uint16(ptr + 1))
 
-		return utils.PackToLittleEndian(low, high)
+		return utils.PackToLittleEndian(low, high), false
 	case IndirectY:
 		base := c.bus.Read(addr)
 		low := c.bus.Read(uint16(base))
 		high := c.bus.Read(uint16(base + 1))
 		deref := utils.PackToLittleEndian(low, high)
+		effective := deref + uint16(c.y)
 
-		return deref + uint16(c.y)
+		return effective, (deref & 0xff00) != (effective & 0xff00)
 	default:
-		return 0
+		return 0, false
 	}
 }
 
+func (c *CPU) getOperandAddress(mode AddressingMode) uint16 {
+	addr, _ := c.resolveAddress(mode, c.pc)
+	return addr
+}
+
+func (c *CPU) readByte(mode AddressingMode) uint8 {
+	addr, pageCrossed := c.resolveAddress(mode, c.pc)
+	if pageCrossed {
+		c.extraCycles++
+	}
+
+	return c.bus.Read(addr)
+}
+
+// register helpers
 func (c *CPU) updateZeroAndNegativeFlags(result uint8) {
 	c.status.UpdateCond(ZeroFlag, result == 0)
 	c.status.UpdateCond(NegativeFlag, result&uint8(NegativeFlag) != 0)
@@ -147,10 +173,9 @@ func (c *CPU) subFromRegisterA(data uint8) {
 	c.addToRegisterA(uint8(-int8(data) - 1))
 }
 
+// instruction helpers
 func (c *CPU) compare(mode AddressingMode, compareWith uint8) {
-	addr := c.getOperandAddress(mode, c.pc)
-	value := c.bus.Read(addr)
-
+	value := c.readByte(mode)
 	c.status.UpdateCond(CarryFlag, compareWith >= value)
 	c.updateZeroAndNegativeFlags(compareWith - value)
 }
@@ -159,12 +184,20 @@ func (c *CPU) branch(condition bool) {
 	if condition {
 		jump := int8(c.bus.Read(c.pc))
 		// "+ 1" is to jump over the offset operand
-		dest := c.pc + 1 + uint16(jump)
+		base := c.pc + 1
+		dest := base + uint16(jump)
+
+		if (base & 0xff00) != (dest & 0xff00) {
+			c.extraCycles += 2
+		} else {
+			c.extraCycles++
+		}
 
 		c.pc = dest
 	}
 }
 
+// stack
 func (c *CPU) stackPush(data uint8) {
 	c.bus.Write(constants.STACK_START+uint16(c.sp), data)
 	c.sp--

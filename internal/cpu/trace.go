@@ -22,7 +22,7 @@ func (c *CPU) trace(opcode uint8) {
 	hexDump := []string{}
 	hexDump = append(hexDump, utils.ToHexadecimalString(opcode, 2))
 
-	operandAddr := c.getOperandAddress(inst.mode, begin+1)
+	operandAddr, _ := c.resolveAddress(inst.mode, begin+1)
 	storedValue := c.bus.Read(operandAddr)
 
 	disassembledArgs := ""
