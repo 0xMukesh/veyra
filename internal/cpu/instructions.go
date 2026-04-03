@@ -23,8 +23,8 @@ const (
 type Instruction struct {
 	mnemonic   string
 	mode       AddressingMode
-	bytes      int
-	baseCycles int
+	bytes      uint
+	baseCycles uint
 	handler    func(AddressingMode)
 }
 
@@ -34,7 +34,7 @@ func dropReturn[T any](f func(AddressingMode) T) func(AddressingMode) {
 	}
 }
 
-func NewInstruction(mnemonic string, mode AddressingMode, bytes, baseCycles int, handler func(AddressingMode)) Instruction {
+func NewInstruction(mnemonic string, mode AddressingMode, bytes, baseCycles uint, handler func(AddressingMode)) Instruction {
 	return Instruction{
 		mnemonic:   mnemonic,
 		mode:       mode,
@@ -684,7 +684,7 @@ func (c *CPU) cld(AddressingMode) {
 }
 
 func (c *CPU) cli(AddressingMode) {
-	c.status.Clear(InterruptFlag)
+	c.status.Clear(InterruptDisableFlag)
 }
 
 func (c *CPU) clv(AddressingMode) {
@@ -700,7 +700,7 @@ func (c *CPU) sed(AddressingMode) {
 }
 
 func (c *CPU) sei(AddressingMode) {
-	c.status.Set(InterruptFlag)
+	c.status.Set(InterruptDisableFlag)
 }
 
 func (c *CPU) brk(AddressingMode) {

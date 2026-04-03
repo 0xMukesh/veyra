@@ -2,7 +2,7 @@ package ppu
 
 import (
 	"github.com/0xmukesh/veyra/internal/bus"
-	"github.com/0xmukesh/veyra/internal/cartridge"
+	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/helpers"
 )
 
@@ -51,16 +51,46 @@ type PPU struct {
 
 	oamData         [256]uint8
 	internalDataBuf uint8
+	bus             *bus.PpuBus
 
-	bus *bus.PpuBus
+	scanline uint16
+	cycles   uint
 }
 
-func New(cartridge *cartridge.Cartridge) *PPU {
+func New(bus *bus.PpuBus) *PPU {
 	return &PPU{
 		ctrl:    helpers.NewBitflags(0),
 		oamData: [256]uint8{0},
-		bus:     bus.NewPpuBus(cartridge),
+		bus:     bus,
 	}
+}
+
+func (p *PPU) Tick(cycles uint) {
+	p.cycles += cycles
+
+	if p.cycles >= constants.PER_SCANLINE_CYCLE_LIFTIME {
+		p.cycles -= constants.PER_SCANLINE_CYCLE_LIFTIME
+		p.scanline++
+
+		if p.scanline == constants.NMI_TRIGGER_SCANLINE {
+			if p.ctrl.Has(NMIEnable) {
+				p.status.Set(VBlankFlag)
+			}
+		}
+
+		if p.scanline >= constants.NUM_SCANLINES {
+			p.scanline = 0
+			p.status.Clear(VBlankFlag)
+		}
+	}
+}
+
+func (p *PPU) NMIInterruptStatus() bool {
+	if p.ctrl.Has(NMIEnable) {
+		return p.status.Has(VBlankFlag)
+	}
+
+	return false
 }
 
 func (p *PPU) ReadRegister(addr uint16) uint8 {

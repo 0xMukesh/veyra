@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	CarryFlag       = helpers.Bitflags(1 << 0)
-	ZeroFlag        = helpers.Bitflags(1 << 1)
-	InterruptFlag   = helpers.Bitflags(1 << 2)
-	DecimalModeFlag = helpers.Bitflags(1 << 3) // unused
-	BreakFlag       = helpers.Bitflags(1 << 4)
-	UnusedFlag      = helpers.Bitflags(1 << 5)
-	OverflowFlag    = helpers.Bitflags(1 << 6)
-	NegativeFlag    = helpers.Bitflags(1 << 7)
+	CarryFlag            = helpers.Bitflags(1 << 0)
+	ZeroFlag             = helpers.Bitflags(1 << 1)
+	InterruptDisableFlag = helpers.Bitflags(1 << 2)
+	DecimalModeFlag      = helpers.Bitflags(1 << 3) // unused
+	BreakFlag            = helpers.Bitflags(1 << 4)
+	UnusedFlag           = helpers.Bitflags(1 << 5)
+	OverflowFlag         = helpers.Bitflags(1 << 6)
+	NegativeFlag         = helpers.Bitflags(1 << 7)
 )
 
 type CPU struct {
@@ -31,7 +31,7 @@ type CPU struct {
 	bus    *bus.CpuBus
 
 	halted      bool
-	extraCycles int
+	extraCycles uint
 }
 
 func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
@@ -39,7 +39,7 @@ func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
 		pc:          entrypoint,
 		sp:          constants.STACK_RESET,
 		a:           0,
-		status:      helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptFlag)),
+		status:      helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptDisableFlag)),
 		bus:         bus,
 		halted:      false,
 		extraCycles: 0,
@@ -48,6 +48,10 @@ func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
 
 func (c *CPU) Step(trace bool) {
 	c.extraCycles = 0
+
+	if c.bus.FetchNMIInterruptStatus() {
+		c.nmi()
+	}
 
 	opcode := c.bus.Read(c.pc)
 	if trace {

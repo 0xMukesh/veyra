@@ -10,17 +10,19 @@ import (
 	"github.com/0xmukesh/veyra/internal/utils"
 )
 
-type PpuRegisters interface {
+type PpuInterface interface {
 	ReadRegister(addr uint16) uint8
 	WriteRegister(addr uint16, data uint8)
+	Tick(cycles uint)
+	NMIInterruptStatus() bool
 }
 
 type CpuBus struct {
 	ram    *memory.RAM
 	mapper memory.Mapper
-	ppu    PpuRegisters
+	ppu    PpuInterface
 
-	cycles int
+	cycles uint
 }
 
 func NewCpuBus(cartridge *cartridge.Cartridge) *CpuBus {
@@ -30,12 +32,17 @@ func NewCpuBus(cartridge *cartridge.Cartridge) *CpuBus {
 	}
 }
 
-func (b *CpuBus) AttachPpu(ppu PpuRegisters) {
+func (b *CpuBus) AttachPpu(ppu PpuInterface) {
 	b.ppu = ppu
 }
 
-func (b *CpuBus) Tick(cycles int) {
+func (b *CpuBus) Tick(cycles uint) {
 	b.cycles += cycles
+	b.ppu.Tick(cycles * 3)
+}
+
+func (b *CpuBus) FetchNMIInterruptStatus() bool {
+	return b.ppu.NMIInterruptStatus()
 }
 
 func (b *CpuBus) Read(addr uint16) uint8 {
