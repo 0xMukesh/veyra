@@ -9,16 +9,14 @@ import (
 )
 
 type PpuBus struct {
-	cartridge  *cartridge.Cartridge
-	vram       *memory.RAM
-	paletteRam [32]uint8
+	cartridge *cartridge.Cartridge
+	vram      *memory.RAM
 }
 
 func NewPpuBus(cartridge *cartridge.Cartridge) *PpuBus {
 	return &PpuBus{
-		cartridge:  cartridge,
-		vram:       memory.NewRam(2 * 1024),
-		paletteRam: [32]uint8{0},
+		cartridge: cartridge,
+		vram:      memory.NewRam(2 * 1024),
 	}
 }
 
@@ -27,7 +25,7 @@ func (b *PpuBus) Read(addr uint16) uint8 {
 
 	switch {
 	case addr < 0x2000:
-		return b.cartridge.ReadChrRom(addr)
+		return b.cartridge.ChrRom()[addr]
 	case addr >= 0x2000 && addr <= 0x2fff:
 		return b.vram.Read(b.mirrorVRamAddr(addr))
 	default:

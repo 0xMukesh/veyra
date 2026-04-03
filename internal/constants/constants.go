@@ -27,6 +27,6 @@ const CHRROM_BANK_SIZE uint = 8 * 1024
 var INES_MAGIC_TAG = []uint8{0x4e, 0x45, 0x53, 0x1a} // "NES^Z"
 
 // gui
-const SCREEN_WIDTH = 32
-const SCREEN_HEIGHT = 32
-const SCALE = 10
+const SCREEN_WIDTH = 256
+const SCREEN_HEIGHT = 240
+const SCALE = 3

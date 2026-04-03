@@ -12,12 +12,12 @@ import (
 func TestCpu(t *testing.T) {
 	raw, err := os.ReadFile("../../roms/nestest.nes")
 	if err != nil {
-		panic(fmt.Errorf("failed to read nestest.nes file: %w", err))
+		panic(fmt.Errorf("failed to read nestest.nes file - %w", err))
 	}
 
 	cartridge, err := cartridge.New(raw)
 	if err != nil {
-		panic(fmt.Errorf("failed to initialize cartridge: %w", err))
+		panic(fmt.Errorf("failed to initialize cartridge - %w", err))
 	}
 
 	bus := bus.NewCpuBus(cartridge)
