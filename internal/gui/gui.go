@@ -5,11 +5,58 @@ import (
 	"image/color"
 
 	"github.com/0xmukesh/veyra/internal/cartridge"
+	"github.com/0xmukesh/veyra/internal/constants"
+	"github.com/0xmukesh/veyra/internal/cpu"
 	"github.com/0xmukesh/veyra/internal/ppu"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-var BANK_IDX = 0
+func nmiInterruptCallback(bus *ppu.Bus, texture rl.Texture2D, buffer *[]color.RGBA, width, height, scale int) func(*ppu.PPU) {
+	return func(p *ppu.PPU) {
+		bank := p.BackgroundPatternTableAddress()
+		chrRom := bus.ChrRom()
+		numNametables := 32 * 30
+
+		for i := range numNametables {
+			tileId := bus.Read(uint16(0x2000 + i))
+			tileX := i % 32
+			tileY := i / 32
+			tile := chrRom[(bank + uint16(tileId)*16):(bank + uint16(tileId+1)*16)]
+
+			for y := range 8 {
+				upper := tile[y]
+				lower := tile[y+8]
+
+				for x := range 8 {
+					value := ((upper>>7)&1)<<1 | ((lower >> 7) & 1)
+					upper <<= 1
+					lower <<= 1
+
+					var rgb []uint8
+					switch value {
+					case 0:
+						rgb = ppu.SYSTEM_PALETTE[0x0f]
+					case 1:
+						rgb = ppu.SYSTEM_PALETTE[0x02]
+					case 2:
+						rgb = ppu.SYSTEM_PALETTE[0x28]
+					case 3:
+						rgb = ppu.SYSTEM_PALETTE[0x16]
+					}
+
+					(*buffer)[(tileY*8+y)*width+(tileX*8+x)] = color.RGBA{
+						R: rgb[0],
+						G: rgb[1],
+						B: rgb[2],
+						A: 255,
+					}
+				}
+			}
+		}
+
+		rl.UpdateTexture(texture, *buffer)
+	}
+}
 
 func Start(width, height, scale int32, rom []byte) {
 	rl.InitWindow(width*scale, height*scale, "veyra")
@@ -20,56 +67,25 @@ func Start(width, height, scale int32, rom []byte) {
 		panic(fmt.Errorf("failed to parse cartridge file - %w", err))
 	}
 
-	bankStart := BANK_IDX * 0x1000
 	buffer := make([]color.RGBA, width*height)
-
-	for tileIdx := range 256 {
-		tile := cartridge.ChrRom()[(bankStart + tileIdx*16):(bankStart + (tileIdx+1)*16)]
-
-		tileX := (tileIdx % 32) * 8
-		tileY := (tileIdx / 32) * 8
-
-		for y := range 8 {
-			upper := tile[y]
-			lower := tile[y+8]
-
-			for x := range 8 {
-				x = 7 - x // reversing it
-				value := (1&upper)<<1 | (1 & lower)
-				upper >>= 1
-				lower >>= 1
-
-				var rgb []uint8
-				switch value {
-				case 0:
-					rgb = ppu.SYSTEM_PALETTE[0x01]
-				case 1:
-					rgb = ppu.SYSTEM_PALETTE[0x23]
-				case 2:
-					rgb = ppu.SYSTEM_PALETTE[0x27]
-				case 3:
-					rgb = ppu.SYSTEM_PALETTE[0x30]
-				default:
-					panic("can't be")
-				}
-
-				idx := (y+tileY)*int(width) + (x + tileX)
-				buffer[idx] = color.RGBA{
-					R: rgb[0],
-					G: rgb[1],
-					B: rgb[2],
-					A: 255,
-				}
-			}
-		}
-	}
-
 	img := rl.GenImageColor(int(width), int(height), rl.Black)
 	texture := rl.LoadTextureFromImage(img)
 	rl.UnloadImage(img)
 
+	ppuBus := ppu.NewBus(cartridge)
+	ppu := ppu.New(ppuBus)
+
+	cpuBus := cpu.NewBus(cartridge, nmiInterruptCallback(ppuBus, texture, &buffer, int(width), int(height), int(scale)))
+	cpu := cpu.New(cpuBus)
+	cpuBus.AttachCpu(cpu)
+	cpuBus.AttachPpu(ppu)
+	cpu.Reset()
+
 	for !rl.WindowShouldClose() {
-		rl.UpdateTexture(texture, buffer)
+		cyclesThisFrame := uint(0)
+		for cyclesThisFrame < constants.CPU_CYCLES_PER_FRAME {
+			cyclesThisFrame += cpu.Step(false)
+		}
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)

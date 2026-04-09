@@ -4,8 +4,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/0xmukesh/veyra/internal/bus"
-	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/helpers"
 	"github.com/0xmukesh/veyra/internal/utils"
 )
@@ -14,7 +12,7 @@ const (
 	CarryFlag            = helpers.Bitflags(1 << 0)
 	ZeroFlag             = helpers.Bitflags(1 << 1)
 	InterruptDisableFlag = helpers.Bitflags(1 << 2)
-	DecimalModeFlag      = helpers.Bitflags(1 << 3) // unused
+	DecimalModeFlag      = helpers.Bitflags(1 << 3)
 	BreakFlag            = helpers.Bitflags(1 << 4)
 	UnusedFlag           = helpers.Bitflags(1 << 5)
 	OverflowFlag         = helpers.Bitflags(1 << 6)
@@ -28,17 +26,20 @@ type CPU struct {
 	x      uint8
 	y      uint8
 	status *helpers.Bitflags
-	bus    *bus.CpuBus
+	bus    *Bus
 
-	halted      bool
 	extraCycles uint
+	nmiPending  bool
+	halted      bool
 }
 
-func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
+func New(bus *Bus) *CPU {
 	return &CPU{
-		pc:          entrypoint,
-		sp:          constants.STACK_RESET,
 		a:           0,
+		x:           0,
+		y:           0,
+		sp:          0xfd,
+		pc:          0x8000,
 		status:      helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptDisableFlag)),
 		bus:         bus,
 		halted:      false,
@@ -46,12 +47,17 @@ func New(bus *bus.CpuBus, entrypoint uint16) *CPU {
 	}
 }
 
-func (c *CPU) Step(trace bool) {
-	c.extraCycles = 0
+func (c *CPU) Reset() {
+	c.a = 0
+	c.x = 0
+	c.y = 0
+	c.sp = 0xfd
+	c.status = helpers.NewBitflags(uint8(UnusedFlag) | uint8(InterruptDisableFlag))
+	c.pc = c.bus.ReadU16(0xfffc)
+}
 
-	if c.bus.FetchNMIInterruptStatus() {
-		c.nmi()
-	}
+func (c *CPU) Step(trace bool) uint {
+	c.extraCycles = 0
 
 	opcode := c.bus.Read(c.pc)
 	if trace {
@@ -65,19 +71,32 @@ func (c *CPU) Step(trace bool) {
 	if !ok {
 		slog.Error("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
 		os.Exit(1)
-		return
+		return 0
 	}
 
 	inst.handler(inst.mode)
-	c.bus.Tick(inst.baseCycles + c.extraCycles)
+	totalCycles := inst.baseCycles + c.extraCycles
+	c.bus.Tick(totalCycles)
+
+	if c.nmiPending {
+		c.nmi()
+		c.nmiPending = false
+		c.bus.Tick(7)
+	}
 
 	if c.pc == pcAfterFetch {
 		c.pc += uint16(inst.bytes) - 1
 	}
+
+	return totalCycles
 }
 
 func (c *CPU) IsHalted() bool {
 	return c.halted
+}
+
+func (c *CPU) TriggerNMI() {
+	c.nmiPending = true
 }
 
 func (c *CPU) resolveAddress(mode AddressingMode, addr uint16) (uint16, bool) {
@@ -87,9 +106,9 @@ func (c *CPU) resolveAddress(mode AddressingMode, addr uint16) (uint16, bool) {
 	case ZeroPage:
 		return uint16(c.bus.Read(addr)), false
 	case ZeroPageX:
-		return uint16(c.bus.Read(addr) + c.x), false
+		return uint16(uint8(c.bus.Read(addr) + c.x)), false
 	case ZeroPageY:
-		return uint16(c.bus.Read(addr) + c.y), false
+		return uint16(uint8(c.bus.Read(addr) + c.y)), false
 	case Absolute:
 		return c.bus.ReadU16(addr), false
 	case AbsoluteX:
@@ -112,9 +131,10 @@ func (c *CPU) resolveAddress(mode AddressingMode, addr uint16) (uint16, bool) {
 		}
 	case IndirectX:
 		base := c.bus.Read(addr)
-		ptr := base + c.x
+		ptr := uint8(base + c.x)
+
 		low := c.bus.Read(uint16(ptr))
-		high := c.bus.Read(uint16(ptr + 1))
+		high := c.bus.Read(uint16(uint8(ptr + 1)))
 
 		return utils.PackToLittleEndian(low, high), false
 	case IndirectY:
@@ -203,8 +223,13 @@ func (c *CPU) branch(condition bool) {
 
 // stack
 func (c *CPU) stackPush(data uint8) {
-	c.bus.Write(constants.STACK_START+uint16(c.sp), data)
+	c.bus.Write(0x0100+uint16(c.sp), data)
 	c.sp--
+}
+
+func (c *CPU) stackPop() uint8 {
+	c.sp++
+	return c.bus.Read(0x0100 + uint16(c.sp))
 }
 
 func (c *CPU) stackPushU16(data uint16) {
@@ -213,11 +238,6 @@ func (c *CPU) stackPushU16(data uint16) {
 
 	c.stackPush(high)
 	c.stackPush(low)
-}
-
-func (c *CPU) stackPop() uint8 {
-	c.sp++
-	return c.bus.Read(constants.STACK_START + uint16(c.sp))
 }
 
 func (c *CPU) stackPopU16() uint16 {

@@ -12,5 +12,5 @@ func PackToLittleEndian(low, high uint8) uint16 {
 }
 
 func ToHexadecimalString[T Integer](v T, padding int) string {
-	return fmt.Sprintf("%0*X", padding, v)
+	return fmt.Sprintf("0x%0*X", padding, v)
 }

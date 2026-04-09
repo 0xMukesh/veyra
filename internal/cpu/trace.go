@@ -23,7 +23,11 @@ func (c *CPU) trace(opcode uint8) {
 	hexDump = append(hexDump, utils.ToHexadecimalString(opcode, 2))
 
 	operandAddr, _ := c.resolveAddress(inst.mode, begin+1)
-	storedValue := c.bus.Read(operandAddr)
+	storedValue := 0
+	// to avoid fetching the stored value for PPU range
+	if operandAddr < 0x2000 && operandAddr > 0x3fff {
+		storedValue = int(c.bus.Read(operandAddr))
+	}
 
 	disassembledArgs := ""
 

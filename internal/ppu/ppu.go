@@ -1,40 +1,54 @@
 package ppu
 
 import (
-	"github.com/0xmukesh/veyra/internal/bus"
+	"fmt"
+
 	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/helpers"
 )
 
 // PPUCTRL
 const (
-	BaseNameTableAddressLow       = helpers.Bitflags(1 << 0)
-	BaseNameTableAddressHigh      = helpers.Bitflags(1 << 1)
-	VRAMAddIncrement              = helpers.Bitflags(1 << 2)
-	SpritePatternAddress          = helpers.Bitflags(1 << 3)
-	BackgroundPatternTableAddress = helpers.Bitflags(1 << 4)
-	SpriteSize                    = helpers.Bitflags(1 << 5)
-	MasterSlaveSelect             = helpers.Bitflags(1 << 6)
-	NMIEnable                     = helpers.Bitflags(1 << 7)
+	CtrlBaseNameTableAddressLow       = helpers.Bitflags(1 << 0)
+	CtrlBaseNameTableAddressHigh      = helpers.Bitflags(1 << 1)
+	CtrlVRAMAddIncrement              = helpers.Bitflags(1 << 2)
+	CtrlSpritePatternAddress          = helpers.Bitflags(1 << 3)
+	CtrlBackgroundPatternTableAddress = helpers.Bitflags(1 << 4)
+	CtrlSpriteSize                    = helpers.Bitflags(1 << 5)
+	CtrlMasterSlaveSelect             = helpers.Bitflags(1 << 6)
+	CtrlNMIEnable                     = helpers.Bitflags(1 << 7)
 )
 
 // PPUMASK
 const (
-	Greyscale                     = helpers.Bitflags(1 << 0)
-	ShowBackgroundLeftmost8Pixels = helpers.Bitflags(1 << 1)
-	ShowSpritesLeftmost8Pixels    = helpers.Bitflags(1 << 2)
-	EnableBackgroundRendering     = helpers.Bitflags(1 << 3)
-	EnableSpriteRendering         = helpers.Bitflags(1 << 4)
-	EmphasizeRed                  = helpers.Bitflags(1 << 5)
-	EmphasizeGreen                = helpers.Bitflags(1 << 6)
-	EmphasizeBlue                 = helpers.Bitflags(1 << 7)
+	MaskGreyscale                     = helpers.Bitflags(1 << 0)
+	MaskShowBackgroundLeftmost8Pixels = helpers.Bitflags(1 << 1)
+	MaskShowSpritesLeftmost8Pixels    = helpers.Bitflags(1 << 2)
+	MaskEnableBackgroundRendering     = helpers.Bitflags(1 << 3)
+	MaskEnableSpriteRendering         = helpers.Bitflags(1 << 4)
+	MaskEmphasizeRed                  = helpers.Bitflags(1 << 5)
+	MaskEmphasizeGreen                = helpers.Bitflags(1 << 6)
+	MaskEmphasizeBlue                 = helpers.Bitflags(1 << 7)
 )
 
 // PPUSTATUS
 const (
-	SpriteOverflow = helpers.Bitflags(1 << 5)
-	SpriteZeroHit  = helpers.Bitflags(1 << 6)
-	VBlankFlag     = helpers.Bitflags(1 << 7)
+	StatusSpriteOverflow = helpers.Bitflags(1 << 5)
+	StatusSpriteZeroHit  = helpers.Bitflags(1 << 6)
+	StatusVBlankFlag     = helpers.Bitflags(1 << 7)
+)
+
+// register indices
+const (
+	ControlRegister = iota
+	MaskRegister
+	StatusRegister
+	OAMAddrRegister
+	OAMDataRegister
+	ScrollRegister
+	AddrRegister
+	DataRegister
+	OAMDMARegister
 )
 
 type PPU struct {
@@ -43,101 +57,153 @@ type PPU struct {
 	ctrl   *helpers.Bitflags
 	mask   *helpers.Bitflags
 	status *helpers.Bitflags
+	t      uint16 // (15-bit) during rendering, specifies the starting coarse-x scroll for the next scanline and the starting y scroll for the screen. outside of rendering, used to hold scrolls and vram address before transferring to v register
+	v      uint16 // (15-bit) during rendering, used for scroll position. outside of rendering, used to store current vram address
+	w      bool   // (1-bit) write latch used to indicate whether it is first or second write. if it is false then it is first write else second write. cleared on reading PPUSTATUS register
+	x      uint8  // (3-bit) used to store the fine-x position of the current scroll
 
-	t uint16 // (15-bit) during rendering, specifies the starting coarse-x scroll for the next scanline and the starting y scroll for the screen. outside of rendering, used to hold scrolls and vram address before transferring to v register
-	v uint16 // (15-bit) during rendering, used for scroll position. outside of rendering, used to store current vram address
-	w bool   // (1-bit) write latch used to indicate whether it is first or second write. if it is false then it is first write else second write. cleared on reading PPUSTATUS register
-	x uint8  // (3-bit) used to store the fine-x position of the current scroll
+	bus *Bus
 
-	oamData         [256]uint8
+	oamAddr uint8
+	oamData [256]uint8
+
 	internalDataBuf uint8
-	bus             *bus.PpuBus
-
-	scanline uint16
-	cycles   uint
+	scanline        uint16
+	cycles          uint
+	nmiLine         bool
 }
 
-func New(bus *bus.PpuBus) *PPU {
+func New(bus *Bus) *PPU {
 	return &PPU{
 		ctrl:    helpers.NewBitflags(0),
-		oamData: [256]uint8{0},
+		mask:    helpers.NewBitflags(0),
+		status:  helpers.NewBitflags(0),
 		bus:     bus,
+		oamAddr: 0,
+		oamData: [256]uint8{0},
+		nmiLine: false,
+		w:       false,
+	}
+}
+
+func (p *PPU) FetchNMIInterruptStatus() bool {
+	return p.nmiLine
+}
+
+func (p *PPU) BackgroundPatternTableAddress() uint16 {
+	flag := p.ctrl.Has(CtrlBackgroundPatternTableAddress)
+
+	if flag {
+		return 0x1000
+	} else {
+		return 0
 	}
 }
 
 func (p *PPU) Tick(cycles uint) {
 	p.cycles += cycles
-
-	if p.cycles >= constants.PER_SCANLINE_CYCLE_LIFTIME {
+	for p.cycles >= constants.PER_SCANLINE_CYCLE_LIFTIME {
 		p.cycles -= constants.PER_SCANLINE_CYCLE_LIFTIME
 		p.scanline++
 
 		if p.scanline == constants.NMI_TRIGGER_SCANLINE {
-			if p.ctrl.Has(NMIEnable) {
-				p.status.Set(VBlankFlag)
+			p.status.Set(StatusVBlankFlag)
+			if p.ctrl.Has(CtrlNMIEnable) {
+				p.nmiLine = true
 			}
+		}
+
+		if p.scanline == 261 {
+			p.status.Clear(StatusVBlankFlag)
+			p.nmiLine = false
 		}
 
 		if p.scanline >= constants.NUM_SCANLINES {
 			p.scanline = 0
-			p.status.Clear(VBlankFlag)
 		}
 	}
 }
 
-func (p *PPU) NMIInterruptStatus() bool {
-	if p.ctrl.Has(NMIEnable) {
-		return p.status.Has(VBlankFlag)
-	}
-
-	return false
-}
-
 func (p *PPU) ReadRegister(addr uint16) uint8 {
-	switch addr & 0x7 {
-	case 0, 1, 3, 5, 6:
-		panic("attempt to read from write-only registers")
-	case 2:
-		p.w = false // clear out write latch
-		return uint8(*p.status)
-	case 7:
-		return p.readPpuData()
-	}
+	addr &= 0x7
 
-	return 0
+	switch addr {
+	case StatusRegister:
+		status := uint8(*p.status)
+		p.status.Clear(StatusVBlankFlag)
+		p.w = false
+		p.nmiLine = false
+		return status
+	case OAMDataRegister:
+		return p.oamData[p.oamAddr]
+	case DataRegister:
+		return p.readFromDataRegister()
+	default:
+		panic(fmt.Errorf("attempt to read from a write-only ppu register - 0x200%01x", addr))
+	}
 }
 
 func (p *PPU) WriteRegister(addr uint16, data uint8) {
-	switch addr & 0x7 {
-	case 0:
+	addr &= 0x7
+
+	switch addr {
+	case ControlRegister:
+		beforeVBlankNmiEnableFlag := p.ctrl.Has(CtrlNMIEnable)
 		p.ctrl = helpers.NewBitflags(data)
-	case 1:
+		afterVBlankNmiEnableFlag := p.ctrl.Has(CtrlNMIEnable)
+		vBlankStatus := p.status.Has(StatusVBlankFlag)
+
+		if !beforeVBlankNmiEnableFlag && afterVBlankNmiEnableFlag && vBlankStatus {
+			p.nmiLine = true
+		}
+	case MaskRegister:
 		p.mask = helpers.NewBitflags(data)
-	case 3:
-		panic("attempt to write to a read-only register")
-	case 5:
+	case OAMAddrRegister:
+		p.oamAddr = data
+	case OAMDataRegister:
+		p.oamData[p.oamAddr] = data
+		p.oamAddr++
+	case ScrollRegister:
 		p.updatePpuScroll(data)
-	case 6:
+	case AddrRegister:
 		p.updatePpuAddr(data)
+	case DataRegister:
+		p.writeToDataRegister(data)
+	default:
+		panic(fmt.Errorf("attempt to write to a read-only ppu register - 0x200%01x", addr))
 	}
 }
 
-func (p *PPU) readPpuData() uint8 {
+func (p *PPU) readFromDataRegister() uint8 {
 	addr := p.v
-	vRamAddIncrement := p.ctrl.Has(VRAMAddIncrement)
+	vRamAddIncrementStatus := p.ctrl.Has(CtrlVRAMAddIncrement)
 
-	if vRamAddIncrement {
+	if vRamAddIncrementStatus {
 		p.v += 32
 	} else {
 		p.v += 1
 	}
 
-	p.v &= 0x3fff
+	if addr <= 0x2fff {
+		result := p.internalDataBuf
+		p.internalDataBuf = p.bus.Read(addr)
+		return result
+	} else {
+		return p.bus.Read(addr)
+	}
+}
 
-	result := p.internalDataBuf
-	p.internalDataBuf = p.bus.Read(addr)
+func (p *PPU) writeToDataRegister(data uint8) {
+	addr := p.v
+	vRamAddIncrementStatus := p.ctrl.Has(CtrlVRAMAddIncrement)
 
-	return result
+	if vRamAddIncrementStatus {
+		p.v += 32
+	} else {
+		p.v += 1
+	}
+
+	p.bus.Write(addr, data)
 }
 
 func (p *PPU) updatePpuAddr(data uint8) {
