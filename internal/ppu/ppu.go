@@ -90,6 +90,10 @@ func (p *PPU) FetchNMIInterruptStatus() bool {
 	return p.nmiLine
 }
 
+func (p *PPU) OAMData() [256]uint8 {
+	return p.oamData
+}
+
 func (p *PPU) BackgroundPatternTableAddress() uint16 {
 	flag := p.ctrl.Has(CtrlBackgroundPatternTableAddress)
 

@@ -25,6 +25,10 @@ func (b *Bus) ChrRom() []byte {
 	return b.cartridge.ChrRom()
 }
 
+func (b *Bus) PaletteTable() [32]uint8 {
+	return b.paletteTable
+}
+
 func (b *Bus) Read(addr uint16) uint8 {
 	addr &= 0x3fff
 

@@ -132,7 +132,6 @@ func (c *CPU) resolveAddress(mode AddressingMode, addr uint16) (uint16, bool) {
 	case IndirectX:
 		base := c.bus.Read(addr)
 		ptr := uint8(base + c.x)
-
 		low := c.bus.Read(uint16(ptr))
 		high := c.bus.Read(uint16(uint8(ptr + 1)))
 

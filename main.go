@@ -21,5 +21,6 @@ func main() {
 		panic(fmt.Errorf("unable to read rom file - %w", err))
 	}
 
-	gui.Start(constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT, constants.SCALE, rom)
+	gui := gui.NewGUI(rom, constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT, constants.SCALE)
+	gui.Start()
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/0xmukesh/veyra/internal/constants"
 	"github.com/0xmukesh/veyra/internal/memory"
 )
 
@@ -23,8 +22,10 @@ type Cartridge struct {
 	mirroring Mirroring
 }
 
+var INES_MAGIC_TAG = []uint8{0x4e, 0x45, 0x53, 0x1a}
+
 func New(raw []byte) (*Cartridge, error) {
-	if !slices.Equal(raw[0:4], constants.INES_MAGIC_TAG) {
+	if !slices.Equal(raw[0:4], INES_MAGIC_TAG) {
 		return nil, fmt.Errorf("file is not in iNES format")
 	}
 
@@ -44,8 +45,10 @@ func New(raw []byte) (*Cartridge, error) {
 		mirroring = Horizontal
 	}
 
-	prgRomSize := uint(raw[4]) * constants.PRGROM_BANK_SIZE
-	chrRomSize := uint(raw[5]) * constants.CHRROM_BANK_SIZE
+	prgRomBankSize := 16 * 1024
+	chrRomBankSize := 8 * 1024
+	prgRomSize := uint(raw[4]) * uint(prgRomBankSize)
+	chrRomSize := uint(raw[5]) * uint(chrRomBankSize)
 
 	skipTrainer := (ctrlByteOne & (1 << 2)) == 0
 
