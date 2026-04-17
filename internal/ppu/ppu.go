@@ -12,7 +12,7 @@ const (
 	CtrlBaseNameTableAddressLow       = helpers.Bitflags(1 << 0)
 	CtrlBaseNameTableAddressHigh      = helpers.Bitflags(1 << 1)
 	CtrlVRAMAddIncrement              = helpers.Bitflags(1 << 2)
-	CtrlSpritePatternAddress          = helpers.Bitflags(1 << 3)
+	CtrlSpritePatternTableAddress     = helpers.Bitflags(1 << 3)
 	CtrlBackgroundPatternTableAddress = helpers.Bitflags(1 << 4)
 	CtrlSpriteSize                    = helpers.Bitflags(1 << 5)
 	CtrlMasterSlaveSelect             = helpers.Bitflags(1 << 6)
@@ -104,6 +104,16 @@ func (p *PPU) BackgroundPatternTableAddress() uint16 {
 	}
 }
 
+func (p *PPU) SpritePatternTableAddress() uint16 {
+	flag := p.ctrl.Has(CtrlSpritePatternTableAddress)
+
+	if flag {
+		return 0x1000
+	} else {
+		return 0
+	}
+}
+
 func (p *PPU) Tick(cycles uint) {
 	p.cycles += cycles
 	for p.cycles >= constants.PER_SCANLINE_CYCLE_LIFTIME {
@@ -175,6 +185,13 @@ func (p *PPU) WriteRegister(addr uint16, data uint8) {
 		p.writeToDataRegister(data)
 	default:
 		panic(fmt.Errorf("attempt to write to a read-only ppu register - 0x200%01x", addr))
+	}
+}
+
+func (p *PPU) WriteOAMDMA(buffer [256]uint8) {
+	for _, v := range buffer {
+		p.oamData[p.oamAddr] = v
+		p.oamAddr++
 	}
 }
 

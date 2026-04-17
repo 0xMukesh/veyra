@@ -100,10 +100,10 @@ func (c *CPU) trace(opcode uint8) {
 		cleanMnemonic := inst.mnemonic[1:]
 		disassembledStr = fmt.Sprintf("%-31s", cleanMnemonic+" "+disassembledArgs)
 
-		hexDumpStr = fmt.Sprintf("%-9s", hexDumpStr)
+		hexDumpStr = fmt.Sprintf("%-15s", hexDumpStr)
 		line = fmt.Sprintf("%s  %s*%s %s", pcStr, hexDumpStr, disassembledStr, registersStr)
 	} else {
-		hexDumpStr = fmt.Sprintf("%-10s", hexDumpStr)
+		hexDumpStr = fmt.Sprintf("%-16s", hexDumpStr)
 		line = fmt.Sprintf("%s  %s%s %s", pcStr, hexDumpStr, disassembledStr, registersStr)
 	}
 
