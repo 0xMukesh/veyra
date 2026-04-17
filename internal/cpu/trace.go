@@ -12,7 +12,11 @@ import (
 func (c *CPU) trace(opcode uint8) {
 	begin := c.pc
 
-	inst, ok := c.Instructions()[opcode]
+	if c.instructions == nil {
+		c.instructions = c.buildInstructions()
+	}
+
+	inst, ok := c.instructions[opcode]
 	if !ok {
 		slog.Error("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
 		os.Exit(1)

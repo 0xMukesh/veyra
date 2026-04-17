@@ -28,6 +28,8 @@ type CPU struct {
 	status *helpers.Bitflags
 	bus    *Bus
 
+	instructions map[uint8]Instruction
+
 	extraCycles uint
 	nmiPending  bool
 	halted      bool
@@ -67,7 +69,11 @@ func (c *CPU) Step(trace bool) uint {
 	c.pc++
 	pcAfterFetch := c.pc
 
-	inst, ok := c.Instructions()[opcode]
+	if c.instructions == nil {
+		c.instructions = c.buildInstructions()
+	}
+
+	inst, ok := c.instructions[opcode]
 	if !ok {
 		slog.Error("unknown instruction", slog.String("opcode", utils.ToHexadecimalString(opcode, 2)))
 		os.Exit(1)

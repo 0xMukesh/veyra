@@ -44,7 +44,7 @@ func NewInstruction(mnemonic string, mode AddressingMode, bytes, baseCycles uint
 	}
 }
 
-func (c *CPU) Instructions() map[uint8]Instruction {
+func (c *CPU) buildInstructions() map[uint8]Instruction {
 	return map[uint8]Instruction{
 		0xa9: NewInstruction("LDA", Immediate, 2, 2, c.lda),
 		0xa5: NewInstruction("LDA", ZeroPage, 2, 3, c.lda),

@@ -193,6 +193,10 @@ func (g *GUI) nmiInterruptCallback(p *ppu.PPU) {
 					yCoord += 7 - y
 				}
 
+				if value == 0 {
+					continue
+				}
+
 				if xCoord < 0 || xCoord >= int(g.width) || yCoord < 0 || yCoord >= int(g.height) {
 					continue
 				}
@@ -203,10 +207,6 @@ func (g *GUI) nmiInterruptCallback(p *ppu.PPU) {
 					G: rgb[1],
 					B: rgb[2],
 					A: 255,
-				}
-
-				if value == 0 {
-					fbValue.A = 0
 				}
 
 				g.frameBuffer[frameBufferIdx] = fbValue
