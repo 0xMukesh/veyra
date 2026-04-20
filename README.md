@@ -1,6 +1,8 @@
-# veyra
+# tiny.nes
 
-a tiny NES emulator, written in golang
+a tiny nes emulator, written in golang
+
+https://github.com/user-attachments/assets/fe7dd203-6094-4ef9-a7c7-bacaaf6f55fc
 
 ## references
 
